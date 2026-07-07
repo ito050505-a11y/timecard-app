@@ -76,6 +76,12 @@
 
   .csv-btn { width: 100%; padding: 13px; border-radius: 12px; border: 1.5px solid #7fd8d0; background: #fff; color: #0f766e; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 14px; }
 
+  .status-row { display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  .status-row-left { display: flex; flex-direction: column; }
+  .status-row-name { font-size: 14px; font-weight: 700; color: #222; }
+  .status-row-store { font-size: 11px; color: #b0b0b0; margin-top: 2px; }
+  .status-row-times { font-size: 11px; color: #b0b0b0; margin-top: 2px; }
+
   .empty { text-align: center; color: #c4c4c4; padding: 30px; font-size: 13px; }
   .footer-note { text-align: center; font-size: 11px; color: #c4c4c4; margin-top: 20px; }
 
@@ -126,6 +132,7 @@
 <div id="screen-main" class="content">
   <div class="tabs" style="margin: -20px -16px 16px; border-radius: 0;">
     <button class="tab active" onclick="switchMainTab('clock')">打刻</button>
+    <button class="tab" onclick="switchMainTab('status')">本日の状況</button>
     <button class="tab" onclick="switchMainTab('summary')">月間集計</button>
   </div>
 
@@ -163,6 +170,19 @@
       <div id="today-log-list"><div class="empty">まだ記録がありません</div></div>
     </div>
 
+    <div class="footer-note">燈乃工房</div>
+  </div>
+
+  <!-- 本日の状況タブ -->
+  <div id="main-status" class="content" style="padding:0;">
+    <div class="filter-row" style="margin-bottom:10px;">
+      <select id="status-store-filter" onchange="loadStaffStatus()">
+        <option value="">全店舗</option>
+        <option value="燈乃工房">燈乃工房</option>
+        <option value="allum">allum</option>
+      </select>
+    </div>
+    <div id="status-list"><div class="empty">読み込み中...</div></div>
     <div class="footer-note">燈乃工房</div>
   </div>
 
@@ -320,9 +340,11 @@ function switchMainTab(name) {
   document.querySelectorAll('#screen-main .tab').forEach(t => t.classList.remove('active'));
   event.currentTarget.classList.add('active');
   document.getElementById('main-clock').classList.remove('active');
+  document.getElementById('main-status').classList.remove('active');
   document.getElementById('main-summary').classList.remove('active');
   document.getElementById('main-' + name).classList.add('active');
   if (name === 'summary') loadSummary();
+  if (name === 'status') loadStaffStatus();
 }
 
 function selectStore(store) {
@@ -435,6 +457,45 @@ async function loadTodayEntry() {
   renderClockButtons();
 }
 
+async function loadStaffStatus() {
+  const el = document.getElementById('status-list');
+  el.innerHTML = '<div class="empty">読み込み中...</div>';
+  const storeFilter = document.getElementById('status-store-filter').value;
+  const date = todayStr();
+  const res = await api('GET', `time_entries?work_date=eq.${date}`);
+
+  const targetStaff = STAFF.filter(s => !storeFilter || s.store === storeFilter);
+  if (!targetStaff.length) { el.innerHTML = '<div class="empty">該当するスタッフがいません</div>'; return; }
+
+  el.innerHTML = targetStaff.map(s => {
+    const e = res.find(r => r.staff_name === s.name);
+    let badgeClass = 'status-off', badgeText = '⚪ 未出勤', timesText = '-';
+
+    if (e && e.clock_in && !e.clock_out) {
+      if (e.break_start && !e.break_end) {
+        badgeClass = 'status-break'; badgeText = '☕ 休憩中';
+        timesText = `出勤 ${e.clock_in.slice(0,5)}　休憩開始 ${e.break_start.slice(0,5)}`;
+      } else {
+        badgeClass = 'status-working'; badgeText = '🟢 勤務中';
+        timesText = `出勤 ${e.clock_in.slice(0,5)}`;
+        if (e.break_start && e.break_end) timesText += `　休憩 ${e.break_start.slice(0,5)}〜${e.break_end.slice(0,5)}`;
+      }
+    } else if (e && e.clock_out) {
+      badgeClass = 'status-off'; badgeText = '⚪ 退勤済み';
+      timesText = `${e.clock_in ? e.clock_in.slice(0,5) : '-'}〜${e.clock_out.slice(0,5)}`;
+    }
+
+    return `<div class="status-row">
+      <div class="status-row-left">
+        <div class="status-row-name">${s.name}</div>
+        <div class="status-row-store">${s.store}</div>
+        <div class="status-row-times">${timesText}</div>
+      </div>
+      <div class="status-badge ${badgeClass}" style="margin-bottom:0;">${badgeText}</div>
+    </div>`;
+  }).join('');
+}
+
 function renderStatus() {
   const badge = document.getElementById('status-badge');
   if (!todayEntry || !todayEntry.clock_in) {
@@ -475,7 +536,11 @@ function renderTodayLog() {
   const rows = [];
   if (todayEntry.clock_in) rows.push(['🟢 出勤', todayEntry.clock_in.slice(0,5)]);
   if (todayEntry.break_start) rows.push(['☕ 休憩開始', todayEntry.break_start.slice(0,5)]);
-  if (todayEntry.break_end) rows.push(['☕ 休憩終了', todayEntry.break_end.slice(0,5)]);
+  if (todayEntry.break_end) {
+    const bs = timeToMinutes(todayEntry.break_start), be = timeToMinutes(todayEntry.break_end);
+    const breakMin = bs !== null && be !== null ? be - bs : null;
+    rows.push(['☕ 休憩終了', todayEntry.break_end.slice(0,5) + (breakMin !== null ? `（${breakMin}分）` : '')]);
+  }
   if (todayEntry.clock_out) rows.push(['🚪 退勤', todayEntry.clock_out.slice(0,5)]);
   list.innerHTML = rows.length ? rows.map(r => `
     <div class="log-row"><div class="log-type">${r[0]}</div><div class="log-time">${r[1]}</div></div>
