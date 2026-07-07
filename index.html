@@ -197,6 +197,7 @@
 <script>
 const SUPABASE_URL = 'https://mdqzseflgmesziiwhdif.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kcXpzZWZsZ21lc3ppaXdoZGlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjYzMzgsImV4cCI6MjA5NjA0MjMzOH0.f8xnZ-dxxbg-PY6Ev-5sOi_EyoV3FHfaybSWyR3rZ-4';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxh63i_pNpIr5v1dG4bnCUef4kzWdBIJWl5HD6U-Qp6olBpoyaZlZ3LIbUt-vKIZ74vog/exec';
 
 const STAFF = [
   { name: '伊藤美里', pin: '0520', store: '燈乃工房' },
@@ -481,26 +482,53 @@ function renderTodayLog() {
   `).join('') : '<div class="empty">まだ記録がありません</div>';
 }
 
+async function sendToSheet(type, time) {
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        staff_name: currentStaff.name,
+        store: currentStore,
+        type: type,
+        work_date: todayStr(),
+        time: time
+      })
+    });
+  } catch (e) {
+    console.log('スプレッドシート送信エラー:', e);
+  }
+}
+
 async function doClockIn() {
-  const body = { staff_name: currentStaff.name, store: currentStore, work_date: todayStr(), clock_in: nowTimeStr() };
+  const t = nowTimeStr();
+  const body = { staff_name: currentStaff.name, store: currentStore, work_date: todayStr(), clock_in: t };
   await api('POST', 'time_entries', body);
+  sendToSheet('出勤', t);
   gpsVerified = false; qrVerified = false;
   showToast('出勤を記録しました');
   await loadTodayEntry();
   updateVerifyButtons();
 }
 async function doBreakStart() {
-  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { break_start: nowTimeStr() });
+  const t = nowTimeStr();
+  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { break_start: t });
+  sendToSheet('休憩開始', t);
   showToast('休憩開始を記録しました');
   await loadTodayEntry();
 }
 async function doBreakEnd() {
-  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { break_end: nowTimeStr() });
+  const t = nowTimeStr();
+  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { break_end: t });
+  sendToSheet('休憩終了', t);
   showToast('休憩終了を記録しました');
   await loadTodayEntry();
 }
 async function doClockOut() {
-  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { clock_out: nowTimeStr() });
+  const t = nowTimeStr();
+  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { clock_out: t });
+  sendToSheet('退勤', t);
   gpsVerified = false; qrVerified = false;
   showToast('退勤を記録しました');
   await loadTodayEntry();
