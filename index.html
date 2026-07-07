@@ -347,7 +347,7 @@ function initLoginOptions() {
     opt.value = s.name; opt.textContent = s.name;
     sumSel.appendChild(opt);
     const opt2 = document.createElement('option');
-    opt2.value = s.name; opt2.textContent = `${s.name}（${s.store}）`;
+    opt2.value = s.name; opt2.textContent = s.name;
     adminSel.appendChild(opt2);
   });
   const monthInput = document.getElementById('sum-month');
