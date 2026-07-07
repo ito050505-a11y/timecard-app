@@ -133,7 +133,8 @@
   <div class="tabs" style="margin: -20px -16px 16px; border-radius: 0;">
     <button class="tab active" onclick="switchMainTab('clock')">打刻</button>
     <button class="tab" onclick="switchMainTab('status')">本日の状況</button>
-    <button class="tab" onclick="switchMainTab('summary')">月間集計</button>
+    <button class="tab" id="tab-btn-summary" onclick="switchMainTab('summary')">月間集計</button>
+    <button class="tab" id="tab-btn-admin" onclick="switchMainTab('admin')">記録修正</button>
   </div>
 
   <!-- 打刻タブ -->
@@ -186,6 +187,49 @@
     <div class="footer-note">燈乃工房</div>
   </div>
 
+  <!-- 記録修正タブ（オーナー専用） -->
+  <div id="main-admin" class="content" style="padding:0;">
+    <div class="form-card">
+      <div class="form-group">
+        <div class="form-label">スタッフ</div>
+        <select id="admin-staff" class="form-input" onchange="loadAdminEntry()"></select>
+      </div>
+      <div class="form-group">
+        <div class="form-label">日付</div>
+        <input type="date" id="admin-date" class="form-input" onchange="loadAdminEntry()">
+      </div>
+      <div class="form-group">
+        <div class="form-label">店舗</div>
+        <select id="admin-store" class="form-input">
+          <option value="燈乃工房">燈乃工房</option>
+          <option value="allum">allum</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <div class="form-label">出勤</div>
+          <input type="time" id="admin-clockin" class="form-input">
+        </div>
+        <div class="form-group">
+          <div class="form-label">退勤</div>
+          <input type="time" id="admin-clockout" class="form-input">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <div class="form-label">休憩開始</div>
+          <input type="time" id="admin-breakstart" class="form-input">
+        </div>
+        <div class="form-group">
+          <div class="form-label">休憩終了</div>
+          <input type="time" id="admin-breakend" class="form-input">
+        </div>
+      </div>
+      <button class="btn-save" onclick="saveAdminEntry()">保存する</button>
+      <button class="btn-delete-item" id="admin-delete-btn" style="width:100%;padding:12px;border-radius:12px;border:1.5px solid #fecaca;background:#fff5f5;color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px;display:none;" onclick="deleteAdminEntry()">🗑️ この日の記録を削除</button>
+    </div>
+  </div>
+
   <!-- 月間集計タブ -->
   <div id="main-summary" class="content" style="padding:0;">
     <div class="filter-row">
@@ -220,7 +264,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxh63i_pNpIr5v1dG4bnCUef4kzWdBIJWl5HD6U-Qp6olBpoyaZlZ3LIbUt-vKIZ74vog/exec';
 
 const STAFF = [
-  { name: '伊藤美里', pin: '0520', store: '燈乃工房' },
+  { name: '伊藤美里', pin: '0520', store: '燈乃工房', isOwner: true },
   { name: '関岡典洋', pin: '1017', store: '燈乃工房' },
   { name: '濵野葵生', pin: '0122', store: '燈乃工房' },
   { name: '福村拓也', pin: '1000512', store: 'allum' },
@@ -297,10 +341,14 @@ function renderLoginNameOptions() {
 function initLoginOptions() {
   renderLoginNameOptions();
   const sumSel = document.getElementById('sum-staff');
+  const adminSel = document.getElementById('admin-staff');
   STAFF.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.name; opt.textContent = s.name;
     sumSel.appendChild(opt);
+    const opt2 = document.createElement('option');
+    opt2.value = s.name; opt2.textContent = `${s.name}（${s.store}）`;
+    adminSel.appendChild(opt2);
   });
   const monthInput = document.getElementById('sum-month');
   const d = new Date();
@@ -322,6 +370,8 @@ function tryLogin() {
   document.getElementById('sum-staff').value = staff.name;
   document.getElementById('store-btn-燈乃工房').classList.toggle('active', currentStore === '燈乃工房');
   document.getElementById('store-btn-allum').classList.toggle('active', currentStore === 'allum');
+  document.getElementById('tab-btn-summary').style.display = staff.isOwner ? '' : 'none';
+  document.getElementById('tab-btn-admin').style.display = staff.isOwner ? '' : 'none';
   document.getElementById('screen-login').classList.remove('active');
   document.getElementById('screen-main').classList.add('active');
   document.getElementById('login-pin').value = '';
@@ -331,6 +381,12 @@ function tryLogin() {
 function logout() {
   currentStaff = null;
   gpsVerified = false; qrVerified = false;
+  document.querySelectorAll('#screen-main .tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('#screen-main .tab').classList.add('active');
+  document.getElementById('main-clock').classList.add('active');
+  document.getElementById('main-status').classList.remove('active');
+  document.getElementById('main-summary').classList.remove('active');
+  document.getElementById('main-admin').classList.remove('active');
   document.getElementById('screen-main').classList.remove('active');
   document.getElementById('screen-login').classList.add('active');
   document.getElementById('login-pin').value = '';
@@ -342,9 +398,16 @@ function switchMainTab(name) {
   document.getElementById('main-clock').classList.remove('active');
   document.getElementById('main-status').classList.remove('active');
   document.getElementById('main-summary').classList.remove('active');
+  document.getElementById('main-admin').classList.remove('active');
   document.getElementById('main-' + name).classList.add('active');
   if (name === 'summary') loadSummary();
   if (name === 'status') loadStaffStatus();
+  if (name === 'admin') {
+    if (!document.getElementById('admin-date').value) {
+      document.getElementById('admin-date').value = todayStr();
+    }
+    loadAdminEntry();
+  }
 }
 
 function selectStore(store) {
@@ -494,6 +557,57 @@ async function loadStaffStatus() {
       <div class="status-badge ${badgeClass}" style="margin-bottom:0;">${badgeText}</div>
     </div>`;
   }).join('');
+}
+
+let adminEntryId = null;
+
+async function loadAdminEntry() {
+  const staffName = document.getElementById('admin-staff').value;
+  const date = document.getElementById('admin-date').value;
+  if (!staffName || !date) return;
+  const res = await api('GET', `time_entries?staff_name=eq.${encodeURIComponent(staffName)}&work_date=eq.${date}`);
+  const e = res[0];
+  adminEntryId = e ? e.id : null;
+  const staffInfo = STAFF.find(s => s.name === staffName);
+  document.getElementById('admin-store').value = e ? e.store : (staffInfo ? staffInfo.store : '燈乃工房');
+  document.getElementById('admin-clockin').value = e && e.clock_in ? e.clock_in.slice(0,5) : '';
+  document.getElementById('admin-clockout').value = e && e.clock_out ? e.clock_out.slice(0,5) : '';
+  document.getElementById('admin-breakstart').value = e && e.break_start ? e.break_start.slice(0,5) : '';
+  document.getElementById('admin-breakend').value = e && e.break_end ? e.break_end.slice(0,5) : '';
+  document.getElementById('admin-delete-btn').style.display = e ? 'block' : 'none';
+}
+
+async function saveAdminEntry() {
+  const staffName = document.getElementById('admin-staff').value;
+  const date = document.getElementById('admin-date').value;
+  if (!staffName || !date) { showToast('スタッフと日付を選んでね', true); return; }
+
+  const body = {
+    staff_name: staffName,
+    work_date: date,
+    store: document.getElementById('admin-store').value,
+    clock_in: document.getElementById('admin-clockin').value || null,
+    clock_out: document.getElementById('admin-clockout').value || null,
+    break_start: document.getElementById('admin-breakstart').value || null,
+    break_end: document.getElementById('admin-breakend').value || null
+  };
+
+  if (adminEntryId) {
+    await api('PATCH', `time_entries?id=eq.${adminEntryId}`, body);
+  } else {
+    await api('POST', 'time_entries', body);
+  }
+  showToast('記録を修正しました');
+  loadAdminEntry();
+}
+
+async function deleteAdminEntry() {
+  if (!adminEntryId) return;
+  if (!confirm('この日の記録を削除しますか？元に戻せません。')) return;
+  await api('DELETE', `time_entries?id=eq.${adminEntryId}`);
+  showToast('記録を削除しました');
+  adminEntryId = null;
+  loadAdminEntry();
 }
 
 function renderStatus() {
