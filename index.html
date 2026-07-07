@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タイムカード | 燈乃工房</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif; background: #fafafa; min-height: 100vh; }
+  .header { background: linear-gradient(135deg, #7fd8d0, #3fb8b3); padding: 22px 20px; color: #fff; }
+  .header .sub { font-size: 11px; font-weight: 600; letter-spacing: 2px; opacity: 0.85; margin-bottom: 4px; }
+  .header h1 { font-size: 22px; font-weight: 800; }
+
+  .tabs { display: flex; background: #fff; border-bottom: 1px solid #f0f0f0; position: sticky; top: 0; z-index: 20; }
+  .tab { flex: 1; padding: 13px 4px; border: none; background: none; cursor: pointer; font-size: 13px; color: #aaa; border-bottom: 2.5px solid transparent; font-family: inherit; font-weight: 700; }
+  .tab.active { color: #0f766e; border-bottom-color: #14b8a6; }
+
+  .content { padding: 20px 16px 40px; max-width: 480px; margin: 0 auto; display: none; }
+  .content.active { display: block; }
+
+  .form-card { background: #fff; border-radius: 16px; padding: 24px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 12px; color: #6b7280; margin-bottom: 6px; font-weight: 600; }
+  .form-input { width: 100%; padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 15px; font-family: inherit; }
+  .btn-save { width: 100%; padding: 15px; border-radius: 12px; border: none; background: linear-gradient(135deg, #7fd8d0, #3fb8b3); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; margin-top: 6px; }
+  .login-error { color: #ef4444; font-size: 13px; text-align: center; margin-top: 10px; display: none; }
+
+  .staff-select { background: #fff; border-radius: 14px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+  .staff-label { font-size: 12px; color: #9ca3af; font-weight: 600; margin-bottom: 4px; }
+  .staff-name { font-size: 17px; font-weight: 800; color: #222; }
+  .staff-change { font-size: 12px; color: #3fb8b3; font-weight: 700; background: none; border: none; font-family: inherit; cursor: pointer; }
+
+  .store-select { display: flex; gap: 8px; margin-bottom: 16px; }
+  .store-chip { flex: 1; padding: 12px; border-radius: 12px; border: 2px solid #eee; background: #fff; font-size: 14px; font-weight: 700; color: #999; cursor: pointer; font-family: inherit; }
+  .store-chip.active { background: #e0f7f5; border-color: #14b8a6; color: #0f766e; }
+
+  .clock-card { background: #fff; border-radius: 18px; padding: 24px 20px; margin-bottom: 16px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .now-time { font-size: 34px; font-weight: 800; color: #222; margin-bottom: 4px; }
+  .now-date { font-size: 13px; color: #9ca3af; margin-bottom: 18px; }
+  .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; margin-bottom: 18px; }
+  .status-working { background: #dcfce7; color: #16a34a; }
+  .status-break { background: #fffbeb; color: #d97706; }
+  .status-off { background: #f3f4f6; color: #9ca3af; }
+
+  .verify-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .verify-btn { flex: 1; padding: 12px 8px; border-radius: 12px; border: 1.5px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 700; color: #888; cursor: pointer; font-family: inherit; }
+  .verify-btn.done { border-color: #86efac; background: #f0fdf4; color: #16a34a; }
+
+  .big-btn { width: 100%; padding: 18px; border-radius: 16px; border: none; font-size: 17px; font-weight: 800; cursor: pointer; font-family: inherit; margin-bottom: 10px; }
+  .big-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-clockin { background: linear-gradient(135deg, #7fd8d0, #3fb8b3); color: #fff; }
+  .btn-clockout { background: #fff; color: #ef4444; border: 2px solid #fecaca; }
+  .btn-break { background: #fff; color: #d97706; border: 2px solid #fde68a; }
+
+  .hint { font-size: 11px; color: #b0b0b0; margin-bottom: 14px; }
+
+  .today-log { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .log-title { font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 12px; }
+  .log-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f2f2f2; }
+  .log-row:last-child { border-bottom: none; }
+  .log-type { font-size: 13px; font-weight: 700; color: #374151; }
+  .log-time { font-size: 14px; font-weight: 800; color: #222; }
+
+  .filter-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .filter-row input, .filter-row select { flex: 1; padding: 9px 10px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 13px; background: #fff; font-family: inherit; }
+
+  .summary-card { background: linear-gradient(135deg, #e0f7f5, #ccfbf1); border-radius: 14px; padding: 16px; margin-bottom: 14px; text-align: center; }
+  .summary-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+  .summary-hours { font-size: 28px; font-weight: 800; color: #0f766e; }
+
+  .day-row { display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  .day-date { font-size: 13px; font-weight: 700; color: #374151; }
+  .day-times { font-size: 11px; color: #b0b0b0; margin-top: 2px; }
+  .day-hours { font-size: 15px; font-weight: 800; color: #222; }
+
+  .csv-btn { width: 100%; padding: 13px; border-radius: 12px; border: 1.5px solid #7fd8d0; background: #fff; color: #0f766e; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 14px; }
+
+  .empty { text-align: center; color: #c4c4c4; padding: 30px; font-size: 13px; }
+  .footer-note { text-align: center; font-size: 11px; color: #c4c4c4; margin-top: 20px; }
+
+  .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: none; align-items: center; justify-content: center; flex-direction: column; }
+  .qr-overlay.active { display: flex; }
+  .qr-overlay video { width: 90%; max-width: 340px; border-radius: 16px; }
+  .qr-overlay .qr-msg { color: #fff; margin-top: 16px; font-size: 14px; }
+  .qr-overlay .qr-close { margin-top: 20px; padding: 10px 24px; border-radius: 20px; border: none; background: #fff; color: #333; font-weight: 700; font-family: inherit; }
+
+  .toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: #16a34a; color: #fff; padding: 10px 20px; border-radius: 30px; font-size: 13px; font-weight: 700; z-index: 300; display: none; box-shadow: 0 4px 14px rgba(0,0,0,0.15); }
+  .toast.error { background: #ef4444; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="sub">TIME CARD</div>
+  <h1>タイムカード</h1>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- ログイン画面 -->
+<div id="screen-login" class="content active">
+  <div class="form-card">
+    <div class="form-group">
+      <div class="form-label">店舗を選ぶ</div>
+      <div class="store-select" style="margin-bottom:0;">
+        <button type="button" class="store-chip active" id="login-store-燈乃工房" onclick="setLoginStore('燈乃工房')">燈乃工房</button>
+        <button type="button" class="store-chip" id="login-store-allum" onclick="setLoginStore('allum')">allum</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="form-label">名前を選ぶ</div>
+      <select id="login-name" class="form-input">
+      </select>
+    </div>
+    <div class="form-group">
+      <div class="form-label">パスワード</div>
+      <input type="password" id="login-pin" class="form-input" placeholder="パスワードを入力" inputmode="numeric">
+    </div>
+    <button class="btn-save" onclick="tryLogin()">ログイン</button>
+    <div class="login-error" id="login-error">名前かパスワードが間違っています</div>
+  </div>
+</div>
+
+<!-- メイン画面 -->
+<div id="screen-main" class="content">
+  <div class="tabs" style="margin: -20px -16px 16px; border-radius: 0;">
+    <button class="tab active" onclick="switchMainTab('clock')">打刻</button>
+    <button class="tab" onclick="switchMainTab('summary')">月間集計</button>
+  </div>
+
+  <!-- 打刻タブ -->
+  <div id="main-clock" class="content active" style="padding:0;">
+    <div class="staff-select">
+      <div>
+        <div class="staff-label">現在ログイン中</div>
+        <div class="staff-name" id="current-staff-name">-</div>
+      </div>
+      <button class="staff-change" onclick="logout()">スタッフ変更</button>
+    </div>
+
+    <div class="store-select">
+      <button class="store-chip active" id="store-btn-燈乃工房" onclick="selectStore('燈乃工房')">燈乃工房</button>
+      <button class="store-chip" id="store-btn-allum" onclick="selectStore('allum')">allum</button>
+    </div>
+
+    <div class="clock-card">
+      <div class="now-time" id="now-time">--:--</div>
+      <div class="now-date" id="now-date">-</div>
+      <div class="status-badge status-off" id="status-badge">読み込み中...</div>
+
+      <div class="verify-row">
+        <button class="verify-btn" id="verify-gps-btn" onclick="checkGPS()">📍 位置情報を確認</button>
+        <button class="verify-btn" id="verify-qr-btn" onclick="openQRScanner()">📷 QRコードを読む</button>
+      </div>
+      <div class="hint">出勤・退勤には、位置情報とQRコードの両方の確認が必要です</div>
+
+      <div id="clock-buttons"></div>
+    </div>
+
+    <div class="today-log">
+      <div class="log-title">本日の記録</div>
+      <div id="today-log-list"><div class="empty">まだ記録がありません</div></div>
+    </div>
+
+    <div class="footer-note">燈乃工房</div>
+  </div>
+
+  <!-- 月間集計タブ -->
+  <div id="main-summary" class="content" style="padding:0;">
+    <div class="filter-row">
+      <input type="month" id="sum-month" onchange="loadSummary()">
+      <select id="sum-staff" onchange="loadSummary()"></select>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-label" id="sum-label">合計勤務時間</div>
+      <div class="summary-hours" id="sum-total">-</div>
+    </div>
+
+    <div id="sum-days"><div class="empty">読み込み中...</div></div>
+
+    <button class="csv-btn" onclick="exportCSV()">📥 この内容をCSVでダウンロード</button>
+
+    <div class="footer-note">燈乃工房</div>
+  </div>
+</div>
+
+<!-- QRスキャナー -->
+<div class="qr-overlay" id="qr-overlay">
+  <video id="qr-video" playsinline></video>
+  <canvas id="qr-canvas" style="display:none;"></canvas>
+  <div class="qr-msg" id="qr-msg">お店に貼ってあるQRコードを映してください</div>
+  <button class="qr-close" onclick="closeQRScanner()">閉じる</button>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://mdqzseflgmesziiwhdif.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kcXpzZWZsZ21lc3ppaXdoZGlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjYzMzgsImV4cCI6MjA5NjA0MjMzOH0.f8xnZ-dxxbg-PY6Ev-5sOi_EyoV3FHfaybSWyR3rZ-4';
+
+const STAFF = [
+  { name: '伊藤美里', pin: '0520', store: '燈乃工房' },
+  { name: '関岡典洋', pin: '1017', store: '燈乃工房' },
+  { name: '濵野葵生', pin: '0122', store: '燈乃工房' },
+  { name: '福村拓也', pin: '1000512', store: 'allum' },
+  { name: '廣田香寿実', pin: '3000530', store: 'allum' },
+  { name: '大山なつみ', pin: '3000511', store: 'allum' },
+  { name: '大西咲良', pin: '2000313', store: 'allum' }
+];
+
+const STORES = {
+  '燈乃工房':  { lat: 34.8680933, lng: 136.5803907, qrToken: 'AKARINOKOBO-HONTEN' },
+  'allum': { lat: 34.8421574, lng: 136.5955796, qrToken: 'AKARINOKOBO-ALLUM' }
+};
+const ALLOWED_RADIUS_M = 100;
+
+let currentStaff = null;
+let currentStore = '燈乃工房';
+let loginStore = '燈乃工房';
+let gpsVerified = false;
+let qrVerified = false;
+let todayEntry = null;
+let qrStream = null;
+
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2200);
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function nowTimeStr() {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+async function api(method, path, body) {
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    method,
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Prefer': method === 'POST' ? 'return=representation' : (method === 'GET' ? undefined : 'return=minimal')
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (method === 'GET') return res.json();
+  return res;
+}
+
+function setLoginStore(store) {
+  loginStore = store;
+  document.getElementById('login-store-燈乃工房').classList.toggle('active', store === '燈乃工房');
+  document.getElementById('login-store-allum').classList.toggle('active', store === 'allum');
+  renderLoginNameOptions();
+}
+
+function renderLoginNameOptions() {
+  const sel = document.getElementById('login-name');
+  sel.innerHTML = '';
+  STAFF.filter(s => s.store === loginStore).forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.name; opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+}
+
+function initLoginOptions() {
+  renderLoginNameOptions();
+  const sumSel = document.getElementById('sum-staff');
+  STAFF.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.name; opt.textContent = s.name;
+    sumSel.appendChild(opt);
+  });
+  const monthInput = document.getElementById('sum-month');
+  const d = new Date();
+  monthInput.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
+}
+
+function tryLogin() {
+  const name = document.getElementById('login-name').value;
+  const pin = document.getElementById('login-pin').value;
+  const staff = STAFF.find(s => s.name === name && s.pin === pin && s.store === loginStore);
+  if (!staff) {
+    document.getElementById('login-error').style.display = 'block';
+    return;
+  }
+  document.getElementById('login-error').style.display = 'none';
+  currentStaff = staff;
+  currentStore = staff.store;
+  document.getElementById('current-staff-name').textContent = staff.name;
+  document.getElementById('sum-staff').value = staff.name;
+  document.getElementById('store-btn-燈乃工房').classList.toggle('active', currentStore === '燈乃工房');
+  document.getElementById('store-btn-allum').classList.toggle('active', currentStore === 'allum');
+  document.getElementById('screen-login').classList.remove('active');
+  document.getElementById('screen-main').classList.add('active');
+  document.getElementById('login-pin').value = '';
+  loadTodayEntry();
+  loadSummary();
+}
+function logout() {
+  currentStaff = null;
+  gpsVerified = false; qrVerified = false;
+  document.getElementById('screen-main').classList.remove('active');
+  document.getElementById('screen-login').classList.add('active');
+  document.getElementById('login-pin').value = '';
+}
+
+function switchMainTab(name) {
+  document.querySelectorAll('#screen-main .tab').forEach(t => t.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('main-clock').classList.remove('active');
+  document.getElementById('main-summary').classList.remove('active');
+  document.getElementById('main-' + name).classList.add('active');
+  if (name === 'summary') loadSummary();
+}
+
+function selectStore(store) {
+  currentStore = store;
+  document.getElementById('store-btn-燈乃工房').classList.toggle('active', store === '燈乃工房');
+  document.getElementById('store-btn-allum').classList.toggle('active', store === 'allum');
+  gpsVerified = false; qrVerified = false;
+  updateVerifyButtons();
+  loadTodayEntry();
+}
+
+function tickClock() {
+  const d = new Date();
+  document.getElementById('now-time').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const days = ['日','月','火','水','木','金','土'];
+  document.getElementById('now-date').textContent = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function checkGPS() {
+  if (!navigator.geolocation) { showToast('この端末は位置情報に対応していません', true); return; }
+  showToast('位置情報を確認中...');
+  navigator.geolocation.getCurrentPosition(pos => {
+    const store = STORES[currentStore];
+    const dist = distanceMeters(pos.coords.latitude, pos.coords.longitude, store.lat, store.lng);
+    if (dist <= ALLOWED_RADIUS_M) {
+      gpsVerified = true;
+      showToast('位置情報を確認しました ✓');
+    } else {
+      gpsVerified = false;
+      showToast(`店舗から${Math.round(dist)}m離れています`, true);
+    }
+    updateVerifyButtons();
+  }, () => {
+    showToast('位置情報を取得できませんでした', true);
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+function openQRScanner() {
+  document.getElementById('qr-overlay').classList.add('active');
+  const video = document.getElementById('qr-video');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
+    qrStream = stream;
+    video.srcObject = stream;
+    video.setAttribute('playsinline', true);
+    video.play();
+    requestAnimationFrame(scanQRFrame);
+  }).catch(() => {
+    showToast('カメラを起動できませんでした', true);
+    closeQRScanner();
+  });
+}
+function scanQRFrame() {
+  const overlay = document.getElementById('qr-overlay');
+  if (!overlay.classList.contains('active')) return;
+  const video = document.getElementById('qr-video');
+  const canvas = document.getElementById('qr-canvas');
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (code) {
+      const expected = STORES[currentStore].qrToken;
+      if (code.data === expected) {
+        qrVerified = true;
+        showToast('QRコードを確認しました ✓');
+        updateVerifyButtons();
+        closeQRScanner();
+        return;
+      } else {
+        document.getElementById('qr-msg').textContent = 'このQRコードは選択中の店舗のものではありません';
+      }
+    }
+  }
+  requestAnimationFrame(scanQRFrame);
+}
+function closeQRScanner() {
+  document.getElementById('qr-overlay').classList.remove('active');
+  if (qrStream) { qrStream.getTracks().forEach(t => t.stop()); qrStream = null; }
+  document.getElementById('qr-msg').textContent = 'お店に貼ってあるQRコードを映してください';
+}
+
+function updateVerifyButtons() {
+  document.getElementById('verify-gps-btn').classList.toggle('done', gpsVerified);
+  document.getElementById('verify-gps-btn').textContent = gpsVerified ? '📍 確認済み' : '📍 位置情報を確認';
+  document.getElementById('verify-qr-btn').classList.toggle('done', qrVerified);
+  document.getElementById('verify-qr-btn').textContent = qrVerified ? '📷 確認済み' : '📷 QRコードを読む';
+  renderClockButtons();
+}
+
+async function loadTodayEntry() {
+  if (!currentStaff) return;
+  const date = todayStr();
+  const res = await api('GET', `time_entries?staff_name=eq.${encodeURIComponent(currentStaff.name)}&work_date=eq.${date}`);
+  todayEntry = res[0] || null;
+  renderStatus();
+  renderTodayLog();
+  renderClockButtons();
+}
+
+function renderStatus() {
+  const badge = document.getElementById('status-badge');
+  if (!todayEntry || !todayEntry.clock_in) {
+    badge.textContent = '⚪ 未出勤';
+    badge.className = 'status-badge status-off';
+  } else if (todayEntry.clock_out) {
+    badge.textContent = '⚪ 退勤済み';
+    badge.className = 'status-badge status-off';
+  } else if (todayEntry.break_start && !todayEntry.break_end) {
+    badge.textContent = '☕ 休憩中';
+    badge.className = 'status-badge status-break';
+  } else {
+    badge.textContent = '🟢 勤務中';
+    badge.className = 'status-badge status-working';
+  }
+}
+
+function renderClockButtons() {
+  const wrap = document.getElementById('clock-buttons');
+  const needVerify = !(gpsVerified && qrVerified);
+
+  if (!todayEntry || !todayEntry.clock_in) {
+    wrap.innerHTML = `<button class="big-btn btn-clockin" onclick="doClockIn()" ${needVerify ? 'disabled' : ''}>🟢 出勤する</button>`;
+  } else if (todayEntry.clock_out) {
+    wrap.innerHTML = `<div class="hint" style="text-align:center;">本日の記録は完了しています</div>`;
+  } else if (todayEntry.break_start && !todayEntry.break_end) {
+    wrap.innerHTML = `<button class="big-btn btn-break" onclick="doBreakEnd()">☕ 休憩から戻る</button>`;
+  } else {
+    wrap.innerHTML = `
+      <button class="big-btn btn-break" onclick="doBreakStart()">☕ 休憩に入る</button>
+      <button class="big-btn btn-clockout" onclick="doClockOut()" ${needVerify ? 'disabled' : ''}>🚪 退勤する</button>`;
+  }
+}
+
+function renderTodayLog() {
+  const list = document.getElementById('today-log-list');
+  if (!todayEntry) { list.innerHTML = '<div class="empty">まだ記録がありません</div>'; return; }
+  const rows = [];
+  if (todayEntry.clock_in) rows.push(['🟢 出勤', todayEntry.clock_in.slice(0,5)]);
+  if (todayEntry.break_start) rows.push(['☕ 休憩開始', todayEntry.break_start.slice(0,5)]);
+  if (todayEntry.break_end) rows.push(['☕ 休憩終了', todayEntry.break_end.slice(0,5)]);
+  if (todayEntry.clock_out) rows.push(['🚪 退勤', todayEntry.clock_out.slice(0,5)]);
+  list.innerHTML = rows.length ? rows.map(r => `
+    <div class="log-row"><div class="log-type">${r[0]}</div><div class="log-time">${r[1]}</div></div>
+  `).join('') : '<div class="empty">まだ記録がありません</div>';
+}
+
+async function doClockIn() {
+  const body = { staff_name: currentStaff.name, store: currentStore, work_date: todayStr(), clock_in: nowTimeStr() };
+  await api('POST', 'time_entries', body);
+  gpsVerified = false; qrVerified = false;
+  showToast('出勤を記録しました');
+  await loadTodayEntry();
+  updateVerifyButtons();
+}
+async function doBreakStart() {
+  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { break_start: nowTimeStr() });
+  showToast('休憩開始を記録しました');
+  await loadTodayEntry();
+}
+async function doBreakEnd() {
+  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { break_end: nowTimeStr() });
+  showToast('休憩終了を記録しました');
+  await loadTodayEntry();
+}
+async function doClockOut() {
+  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { clock_out: nowTimeStr() });
+  gpsVerified = false; qrVerified = false;
+  showToast('退勤を記録しました');
+  await loadTodayEntry();
+  updateVerifyButtons();
+}
+
+function timeToMinutes(t) {
+  if (!t) return null;
+  const [h,m] = t.split(':').map(Number);
+  return h*60+m;
+}
+function calcWorkMinutes(e) {
+  const inM = timeToMinutes(e.clock_in), outM = timeToMinutes(e.clock_out);
+  if (inM === null || outM === null) return 0;
+  let total = outM - inM;
+  const bs = timeToMinutes(e.break_start), be = timeToMinutes(e.break_end);
+  if (bs !== null && be !== null) total -= (be - bs);
+  return Math.max(0, total);
+}
+function minutesToHM(min) {
+  const h = Math.floor(min/60), m = min%60;
+  return `${h}時間${m}分`;
+}
+function minutesToHHMM(min) {
+  const h = Math.floor(min/60), m = min%60;
+  return `${h}:${pad(m)}`;
+}
+
+async function loadSummary() {
+  const month = document.getElementById('sum-month').value;
+  const staffName = document.getElementById('sum-staff').value;
+  if (!month || !staffName) return;
+  const [y,m] = month.split('-');
+  const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
+  const res = await api('GET', `time_entries?staff_name=eq.${encodeURIComponent(staffName)}&work_date=gte.${month}-01&work_date=lte.${month}-${pad(lastDay)}&order=work_date.desc`);
+
+  let totalMin = 0;
+  res.forEach(e => totalMin += calcWorkMinutes(e));
+  document.getElementById('sum-label').textContent = `${y}年${parseInt(m)}月 ${staffName} 合計勤務時間`;
+  document.getElementById('sum-total').textContent = minutesToHM(totalMin);
+
+  const daysEl = document.getElementById('sum-days');
+  if (!res.length) {
+    daysEl.innerHTML = '<div class="empty">この月の記録はありません</div>';
+    return;
+  }
+  daysEl.innerHTML = res.map(e => {
+    const d = new Date(e.work_date);
+    const days = ['日','月','火','水','木','金','土'];
+    const dateLabel = `${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+    const timesLabel = e.clock_in && e.clock_out
+      ? `${e.clock_in.slice(0,5)}〜${e.clock_out.slice(0,5)}${e.break_start && e.break_end ? `（休憩${timeToMinutes(e.break_end)-timeToMinutes(e.break_start)}分）` : ''}`
+      : '記録不足';
+    return `<div class="day-row">
+      <div><div class="day-date">${dateLabel}</div><div class="day-times">${timesLabel}</div></div>
+      <div class="day-hours">${minutesToHHMM(calcWorkMinutes(e))}</div>
+    </div>`;
+  }).join('');
+}
+
+function exportCSV() {
+  const month = document.getElementById('sum-month').value;
+  const staffName = document.getElementById('sum-staff').value;
+  const rows = Array.from(document.querySelectorAll('#sum-days .day-row')).map(row => {
+    const date = row.querySelector('.day-date').textContent;
+    const times = row.querySelector('.day-times').textContent;
+    const hours = row.querySelector('.day-hours').textContent;
+    return [date, times, hours];
+  });
+  if (!rows.length) { showToast('データがありません', true); return; }
+
+  const headers = ['日付', '勤務時間', '実働時間'];
+  const csvContent = [headers, ...rows]
+    .map(r => r.map(c => /[",\n]/.test(c) ? `"${c.replace(/"/g,'""')}"` : c).join(','))
+    .join('\r\n');
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `タイムカード_${staffName}_${month}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+initLoginOptions();
+</script>
+</body>
+</html>
