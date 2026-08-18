@@ -302,6 +302,9 @@
 
     <div style="font-size:12px;color:#b0b0b0;font-weight:700;margin:20px 0 10px;">スタッフ別 有給状況</div>
     <div id="leave-balances-list"></div>
+
+    <div style="font-size:12px;color:#b0b0b0;font-weight:700;margin:20px 0 10px;">承認・却下 履歴</div>
+    <div id="leave-history-review-list"><div class="empty">読み込み中...</div></div>
   </div>
 
   <!-- 月間集計タブ -->
@@ -733,7 +736,7 @@ async function loadLeaveTab() {
 function renderLeaveHistory(list) {
   const el = document.getElementById('leave-history-list');
   if (!list.length) { el.innerHTML = '<div class="empty">申請履歴はまだありません</div>'; return; }
-  const statusClass = { '申請中': ['#fffbeb', '#d97706'], '承認済み': ['#f0fdf4', '#16a34a'], '却下': ['#fef2f2', '#ef4444'] };
+  const statusClass = { '申請中': ['#fffbeb', '#d97706'], '承認済み': ['#f0fdf4', '#16a34a'], '却下': ['#fef2f2', '#ef4444'], '取消': ['#f3f4f6', '#6b7280'] };
   el.innerHTML = list.map(r => {
     const [bg, color] = statusClass[r.status] || statusClass['申請中'];
     let detail;
@@ -789,12 +792,58 @@ async function submitLeaveRequest() {
 
 // ---- 有給管理（オーナー側） ----
 async function loadLeaveReview() {
-  const [pending, balances] = await Promise.all([
+  const [pending, balances, reviewed] = await Promise.all([
     api('GET', 'leave_requests?status=eq.申請中&order=requested_at.asc'),
-    api('GET', 'leave_balances?order=staff.asc')
+    api('GET', 'leave_balances?order=staff.asc'),
+    api('GET', 'leave_requests?status=in.(承認済み,却下)&order=reviewed_at.desc')
   ]);
   renderLeavePending(pending || []);
   renderLeaveBalances(balances || []);
+  renderLeaveReviewHistory(reviewed || []);
+}
+
+function renderLeaveReviewHistory(list) {
+  const el = document.getElementById('leave-history-review-list');
+  if (!list.length) { el.innerHTML = '<div class="empty">履歴はまだありません</div>'; return; }
+  el.innerHTML = list.slice(0, 30).map(r => {
+    let detail;
+    if (r.leave_type === '時間') detail = `${r.start_date}　${(r.start_time||'').slice(0,5)}〜（${r.hours}時間）`;
+    else if (r.leave_type === '半休') detail = `${r.start_date}（半休）`;
+    else detail = r.end_date && r.end_date !== r.start_date ? `${r.start_date}〜${r.end_date}` : `${r.start_date}`;
+    const isApproved = r.status === '承認済み';
+    const bg = isApproved ? '#f0fdf4' : '#fef2f2';
+    const color = isApproved ? '#16a34a' : '#ef4444';
+    return `<div class="today-log" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:14px;font-weight:700;color:#222;">${r.staff}</div>
+        <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${bg};color:${color};">${r.status}</span>
+      </div>
+      <div style="font-size:12px;color:#999;margin-bottom:8px;">${r.leave_type}　${detail}</div>
+      ${isApproved ? `<button onclick="cancelApprovedLeave('${r.id}')" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid #fecaca;background:#fff5f5;color:#ef4444;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">この承認を取り消す</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function cancelApprovedLeave(id) {
+  if (!confirm('この承認を取り消しますか？残り日数（または時間）が元に戻ります。')) return;
+  const reqRes = await api('GET', `leave_requests?id=eq.${id}`);
+  const req = reqRes[0];
+  if (!req) return;
+
+  const balRes = await api('GET', `leave_balances?staff=eq.${encodeURIComponent(req.staff)}`);
+  const bal = balRes[0];
+  if (bal) {
+    const patch = { updated_at: new Date().toISOString() };
+    if (req.leave_type === '時間') {
+      patch.hourly_used_this_year = Math.max(0, (bal.hourly_used_this_year || 0) - Number(req.hours || 0));
+    } else {
+      patch.used_days = Math.max(0, (bal.used_days || 0) - Number(req.days_count || 0));
+    }
+    await api('PATCH', `leave_balances?staff=eq.${encodeURIComponent(req.staff)}`, patch);
+  }
+  await api('PATCH', `leave_requests?id=eq.${id}`, { status: '取消', reviewed_at: new Date().toISOString(), reviewed_by: currentStaff.name });
+  showToast('承認を取り消しました');
+  loadLeaveReview();
 }
 
 function renderLeavePending(list) {
