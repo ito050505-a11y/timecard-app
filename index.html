@@ -133,8 +133,10 @@
   <div class="tabs" style="margin: -20px -16px 16px; border-radius: 0;">
     <button class="tab active" onclick="switchMainTab('clock')">打刻</button>
     <button class="tab" onclick="switchMainTab('status')">本日の状況</button>
+    <button class="tab" id="tab-btn-leave" onclick="switchMainTab('leave')">有給申請</button>
     <button class="tab" id="tab-btn-summary" onclick="switchMainTab('summary')">月間集計</button>
     <button class="tab" id="tab-btn-admin" onclick="switchMainTab('admin')">記録修正</button>
+    <button class="tab" id="tab-btn-leave-review" onclick="switchMainTab('leave_review')">有給管理</button>
   </div>
 
   <!-- 打刻タブ -->
@@ -230,6 +232,78 @@
     </div>
   </div>
 
+  <!-- 有給申請タブ -->
+  <div id="main-leave" class="content" style="padding:0;">
+    <div style="background:linear-gradient(135deg,#7fd8d0,#3fb8b3);border-radius:16px;padding:20px;color:#fff;margin-bottom:14px;text-align:center;">
+      <div style="font-size:12px;opacity:0.85;margin-bottom:4px;">残り有給日数</div>
+      <div style="font-size:32px;font-weight:800;" id="leave-balance-days">-</div>
+      <div style="font-size:11px;margin-top:6px;opacity:0.85;" id="leave-balance-sub"></div>
+    </div>
+
+    <div style="background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:20px;box-shadow:0 1px 6px rgba(0,0,0,0.05);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;color:#555;">⏱ 時間単位 使用状況</div>
+        <div style="font-size:13px;font-weight:800;color:#0f766e;" id="leave-hourly-num">- / 40 時間</div>
+      </div>
+      <div style="background:#eee;border-radius:20px;height:8px;overflow:hidden;">
+        <div id="leave-hourly-bar" style="background:linear-gradient(90deg,#7fd8d0,#3fb8b3);height:100%;border-radius:20px;width:0%;"></div>
+      </div>
+      <div style="font-size:11px;color:#b0b0b0;margin-top:6px;">年5日分（40時間）まで時間単位で取得できます</div>
+    </div>
+
+    <div style="background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 6px rgba(0,0,0,0.05);margin-bottom:20px;">
+      <div style="font-size:13px;font-weight:700;color:#0f766e;margin-bottom:14px;">📝 有給を申請する</div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <button type="button" class="leave-type-btn active" data-type="全休" onclick="setLeaveType('全休')" style="flex:1;padding:10px 0;border-radius:10px;border:2px solid #14b8a6;background:#ccfbf1;font-size:13px;font-weight:700;color:#0f766e;cursor:pointer;font-family:inherit;">全休</button>
+        <button type="button" class="leave-type-btn" data-type="半休" onclick="setLeaveType('半休')" style="flex:1;padding:10px 0;border-radius:10px;border:2px solid #eee;background:#fff;font-size:13px;font-weight:700;color:#999;cursor:pointer;font-family:inherit;">半休</button>
+        <button type="button" class="leave-type-btn" data-type="時間" onclick="setLeaveType('時間')" style="flex:1;padding:10px 0;border-radius:10px;border:2px solid #eee;background:#fff;font-size:13px;font-weight:700;color:#999;cursor:pointer;font-family:inherit;">時間単位</button>
+      </div>
+
+      <div id="leave-hour-box" style="display:none;">
+        <div style="text-align:center;margin-bottom:10px;">
+          <span id="leave-hour-value" style="font-size:32px;font-weight:800;color:#0f766e;">2</span><span style="font-size:13px;color:#999;margin-left:4px;">時間</span>
+        </div>
+        <input type="range" min="1" max="8" step="1" value="2" id="leave-hour-slider" oninput="document.getElementById('leave-hour-value').textContent=this.value" style="width:100%;height:6px;border-radius:10px;-webkit-appearance:none;background:#e5e7eb;outline:none;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#bbb;padding:0 4px;margin-bottom:12px;">
+          <span>1h</span><span>2h</span><span>3h</span><span>4h</span><span>5h</span><span>6h</span><span>7h</span><span>8h</span>
+        </div>
+        <div class="form-group">
+          <div class="form-label">開始時刻</div>
+          <input type="time" id="leave-start-time" class="form-input" value="14:00">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <div class="form-label">開始日</div>
+          <input type="date" id="leave-start-date" class="form-input">
+        </div>
+        <div class="form-group" id="leave-end-date-group">
+          <div class="form-label">終了日</div>
+          <input type="date" id="leave-end-date" class="form-input">
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="form-label">理由（任意）</div>
+        <input type="text" id="leave-reason" class="form-input" placeholder="私用のため">
+      </div>
+      <button class="btn-save" onclick="submitLeaveRequest()">申請する</button>
+    </div>
+
+    <div style="font-size:12px;color:#b0b0b0;font-weight:700;margin:20px 0 10px;">申請履歴</div>
+    <div id="leave-history-list"><div class="empty">読み込み中...</div></div>
+  </div>
+
+  <!-- 有給管理タブ（オーナー専用） -->
+  <div id="main-leave_review" class="content" style="padding:0;">
+    <div style="font-size:12px;color:#b0b0b0;font-weight:700;margin:0 0 10px;">⚠️ 承認待ちの申請</div>
+    <div id="leave-pending-list"><div class="empty">読み込み中...</div></div>
+
+    <div style="font-size:12px;color:#b0b0b0;font-weight:700;margin:20px 0 10px;">スタッフ別 有給状況</div>
+    <div id="leave-balances-list"></div>
+  </div>
+
   <!-- 月間集計タブ -->
   <div id="main-summary" class="content" style="padding:0;">
     <div class="filter-row">
@@ -265,13 +339,15 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbxh63i_pNpIr5v1dG4bnCUe
 
 const STAFF = [
   { name: '伊藤美里', pin: '0520', store: '燈乃工房', isOwner: true },
-  { name: '関岡典洋', pin: '1017', store: '燈乃工房' },
-  { name: '濵野葵生', pin: '0122', store: '燈乃工房' },
+  { name: '関岡典洋', pin: '1017', store: '燈乃工房', leaveEligible: true },
+  { name: '濵野葵生', pin: '0122', store: '燈乃工房', leaveEligible: true },
   { name: '福村拓也', pin: '1000512', store: 'allum' },
   { name: '廣田香寿実', pin: '3000530', store: 'allum' },
   { name: '大山なつみ', pin: '3000511', store: 'allum' },
-  { name: '大西咲良', pin: '2000313', store: 'allum' }
+  { name: '大西咲良', pin: '2000313', store: 'allum', leaveEligible: true }
 ];
+const LEAVE_TYPES = ['全休', '半休', '時間'];
+const HOURLY_LEAVE_LIMIT = 40; // 年5日分（8時間×5日）まで時間単位OK
 
 const STORES = {
   '燈乃工房':  { lat: 34.8680933, lng: 136.5803907, qrToken: 'AKARINOKOBO-HONTEN' },
@@ -372,6 +448,8 @@ function tryLogin() {
   document.getElementById('store-btn-allum').classList.toggle('active', currentStore === 'allum');
   document.getElementById('tab-btn-summary').style.display = staff.isOwner ? '' : 'none';
   document.getElementById('tab-btn-admin').style.display = staff.isOwner ? '' : 'none';
+  document.getElementById('tab-btn-leave-review').style.display = staff.isOwner ? '' : 'none';
+  document.getElementById('tab-btn-leave').style.display = staff.leaveEligible ? '' : 'none';
   document.getElementById('screen-login').classList.remove('active');
   document.getElementById('screen-main').classList.add('active');
   document.getElementById('login-pin').value = '';
@@ -387,6 +465,8 @@ function logout() {
   document.getElementById('main-status').classList.remove('active');
   document.getElementById('main-summary').classList.remove('active');
   document.getElementById('main-admin').classList.remove('active');
+  document.getElementById('main-leave').classList.remove('active');
+  document.getElementById('main-leave_review').classList.remove('active');
   document.getElementById('screen-main').classList.remove('active');
   document.getElementById('screen-login').classList.add('active');
   document.getElementById('login-pin').value = '';
@@ -399,9 +479,13 @@ function switchMainTab(name) {
   document.getElementById('main-status').classList.remove('active');
   document.getElementById('main-summary').classList.remove('active');
   document.getElementById('main-admin').classList.remove('active');
+  document.getElementById('main-leave').classList.remove('active');
+  document.getElementById('main-leave_review').classList.remove('active');
   document.getElementById('main-' + name).classList.add('active');
   if (name === 'summary') loadSummary();
   if (name === 'status') loadStaffStatus();
+  if (name === 'leave') loadLeaveTab();
+  if (name === 'leave_review') loadLeaveReview();
   if (name === 'admin') {
     if (!document.getElementById('admin-date').value) {
       document.getElementById('admin-date').value = todayStr();
@@ -608,6 +692,192 @@ async function deleteAdminEntry() {
   showToast('記録を削除しました');
   adminEntryId = null;
   loadAdminEntry();
+}
+
+// ---- 有給申請（スタッフ側） ----
+let leaveType = '全休';
+let currentLeaveBalance = null;
+
+function setLeaveType(type) {
+  leaveType = type;
+  document.querySelectorAll('.leave-type-btn').forEach(b => {
+    const active = b.dataset.type === type;
+    b.style.background = active ? '#ccfbf1' : '#fff';
+    b.style.borderColor = active ? '#14b8a6' : '#eee';
+    b.style.color = active ? '#0f766e' : '#999';
+  });
+  document.getElementById('leave-hour-box').style.display = type === '時間' ? 'block' : 'none';
+  document.getElementById('leave-end-date-group').style.display = type === '時間' ? 'none' : 'block';
+}
+
+async function loadLeaveTab() {
+  if (!currentStaff) return;
+  const startInput = document.getElementById('leave-start-date');
+  const endInput = document.getElementById('leave-end-date');
+  if (!startInput.value) { startInput.value = todayStr(); endInput.value = todayStr(); }
+
+  const balRes = await api('GET', `leave_balances?staff=eq.${encodeURIComponent(currentStaff.name)}`);
+  const bal = balRes[0] || { granted_days: 0, used_days: 0, hourly_used_this_year: 0 };
+  currentLeaveBalance = bal;
+  const remaining = (bal.granted_days || 0) - (bal.used_days || 0);
+  document.getElementById('leave-balance-days').textContent = remaining.toFixed(1) + ' 日';
+  document.getElementById('leave-balance-sub').textContent = `付与：${bal.granted_days || 0}日／使用済：${(bal.used_days || 0).toFixed(1)}日`;
+  const hourlyUsed = bal.hourly_used_this_year || 0;
+  document.getElementById('leave-hourly-num').textContent = `${hourlyUsed} / ${HOURLY_LEAVE_LIMIT} 時間`;
+  document.getElementById('leave-hourly-bar').style.width = Math.min(100, hourlyUsed / HOURLY_LEAVE_LIMIT * 100) + '%';
+
+  const reqRes = await api('GET', `leave_requests?staff=eq.${encodeURIComponent(currentStaff.name)}&order=requested_at.desc`);
+  renderLeaveHistory(reqRes || []);
+}
+
+function renderLeaveHistory(list) {
+  const el = document.getElementById('leave-history-list');
+  if (!list.length) { el.innerHTML = '<div class="empty">申請履歴はまだありません</div>'; return; }
+  const statusClass = { '申請中': ['#fffbeb', '#d97706'], '承認済み': ['#f0fdf4', '#16a34a'], '却下': ['#fef2f2', '#ef4444'] };
+  el.innerHTML = list.map(r => {
+    const [bg, color] = statusClass[r.status] || statusClass['申請中'];
+    let detail;
+    if (r.leave_type === '時間') detail = `${r.start_date}　${(r.start_time||'').slice(0,5)}〜（${r.hours}時間）`;
+    else if (r.leave_type === '半休') detail = `${r.start_date}（0.5日分）`;
+    else detail = r.end_date && r.end_date !== r.start_date ? `${r.start_date}〜${r.end_date}（${r.days_count}日分）` : `${r.start_date}（${r.days_count}日分）`;
+    return `<div class="today-log" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:14px;font-weight:700;color:#222;">${detail}</div>
+        <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${bg};color:${color};">${r.status}</span>
+      </div>
+      <div style="font-size:11px;color:#999;">${r.leave_type}${r.reason ? '　' + r.reason : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+async function submitLeaveRequest() {
+  const startDate = document.getElementById('leave-start-date').value;
+  const endDate = document.getElementById('leave-end-date').value;
+  const reason = document.getElementById('leave-reason').value;
+  if (!startDate) { showToast('開始日を選んでね', true); return; }
+
+  let body = { staff: currentStaff.name, leave_type: leaveType, start_date: startDate, reason, status: '申請中' };
+
+  if (leaveType === '時間') {
+    const hours = Number(document.getElementById('leave-hour-slider').value);
+    const startTime = document.getElementById('leave-start-time').value;
+    const usedSoFar = (currentLeaveBalance && currentLeaveBalance.hourly_used_this_year) || 0;
+    if (usedSoFar + hours > HOURLY_LEAVE_LIMIT) {
+      showToast(`時間単位は年${HOURLY_LEAVE_LIMIT}時間までです（残り${HOURLY_LEAVE_LIMIT - usedSoFar}時間）`, true);
+      return;
+    }
+    body.hours = hours;
+    body.start_time = startTime;
+    body.days_count = hours / 8;
+    body.end_date = startDate;
+  } else if (leaveType === '半休') {
+    body.days_count = 0.5;
+    body.end_date = startDate;
+  } else {
+    if (!endDate) { showToast('終了日を選んでね', true); return; }
+    const days = Math.round((new Date(endDate) - new Date(startDate)) / (1000*60*60*24)) + 1;
+    if (days < 1) { showToast('終了日は開始日以降にしてね', true); return; }
+    body.days_count = days;
+    body.end_date = endDate;
+  }
+
+  await api('POST', 'leave_requests', body);
+  showToast('申請しました');
+  document.getElementById('leave-reason').value = '';
+  loadLeaveTab();
+}
+
+// ---- 有給管理（オーナー側） ----
+async function loadLeaveReview() {
+  const [pending, balances] = await Promise.all([
+    api('GET', 'leave_requests?status=eq.申請中&order=requested_at.asc'),
+    api('GET', 'leave_balances?order=staff.asc')
+  ]);
+  renderLeavePending(pending || []);
+  renderLeaveBalances(balances || []);
+}
+
+function renderLeavePending(list) {
+  const el = document.getElementById('leave-pending-list');
+  if (!list.length) { el.innerHTML = '<div class="empty">承認待ちの申請はありません 🎉</div>'; return; }
+  el.innerHTML = list.map(r => {
+    let detail;
+    if (r.leave_type === '時間') detail = `${r.start_date}　${(r.start_time||'').slice(0,5)}〜（${r.hours}時間）`;
+    else if (r.leave_type === '半休') detail = `${r.start_date}（半休）`;
+    else detail = r.end_date && r.end_date !== r.start_date ? `${r.start_date}〜${r.end_date}` : `${r.start_date}`;
+    return `<div class="form-card" style="border:2px solid #fde68a;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:14px;font-weight:800;color:#222;">${r.staff}</div>
+        <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#fffbeb;color:#d97706;">申請中</span>
+      </div>
+      <div style="font-size:13px;color:#555;margin-bottom:4px;">${r.leave_type}　${detail}</div>
+      <div style="font-size:12px;color:#999;margin-bottom:12px;">${r.reason || ''}</div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="reviewLeaveRequest('${r.id}','承認済み')" style="flex:1;padding:9px;border-radius:10px;border:none;background:#16a34a;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">承認する</button>
+        <button onclick="reviewLeaveRequest('${r.id}','却下')" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid #fecaca;background:#fff5f5;color:#ef4444;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">却下する</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderLeaveBalances(list) {
+  const el = document.getElementById('leave-balances-list');
+  if (!list.length) { el.innerHTML = '<div class="empty">対象スタッフがいません</div>'; return; }
+  el.innerHTML = list.map(b => {
+    const remaining = (b.granted_days || 0) - (b.used_days || 0);
+    return `<div class="form-card" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:15px;font-weight:800;color:#222;">${b.staff}</div>
+        <button onclick="editLeaveDays('${b.staff}',${b.granted_days||0})" style="background:#ccfbf1;border:none;color:#0f766e;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;cursor:pointer;font-family:inherit;">日数を編集</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;background:#fafafa;border-radius:10px;padding:8px;text-align:center;">
+          <div style="font-size:15px;font-weight:800;color:#0f766e;">${remaining.toFixed(1)}日</div>
+          <div style="font-size:10px;color:#999;margin-top:2px;">残り／付与${b.granted_days||0}日</div>
+        </div>
+        <div style="flex:1;background:#fafafa;border-radius:10px;padding:8px;text-align:center;">
+          <div style="font-size:15px;font-weight:800;color:#0f766e;">${b.hourly_used_this_year||0}h</div>
+          <div style="font-size:10px;color:#999;margin-top:2px;">時間単位使用／${HOURLY_LEAVE_LIMIT}h</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function editLeaveDays(staff, current) {
+  const input = prompt(`${staff}さんの付与日数を入力してください`, current);
+  if (input === null) return;
+  const days = Number(input);
+  if (isNaN(days) || days < 0) { showToast('正しい日数を入力してね', true); return; }
+  await api('PATCH', `leave_balances?staff=eq.${encodeURIComponent(staff)}`, { granted_days: days, updated_at: new Date().toISOString() });
+  showToast('更新しました');
+  loadLeaveReview();
+}
+
+async function reviewLeaveRequest(id, status) {
+  const reqRes = await api('GET', `leave_requests?id=eq.${id}`);
+  const req = reqRes[0];
+  if (!req) return;
+
+  await api('PATCH', `leave_requests?id=eq.${id}`, {
+    status, reviewed_at: new Date().toISOString(), reviewed_by: currentStaff.name
+  });
+
+  if (status === '承認済み') {
+    const balRes = await api('GET', `leave_balances?staff=eq.${encodeURIComponent(req.staff)}`);
+    const bal = balRes[0];
+    if (bal) {
+      const patch = { updated_at: new Date().toISOString() };
+      if (req.leave_type === '時間') {
+        patch.hourly_used_this_year = (bal.hourly_used_this_year || 0) + Number(req.hours || 0);
+      } else {
+        patch.used_days = (bal.used_days || 0) + Number(req.days_count || 0);
+      }
+      await api('PATCH', `leave_balances?staff=eq.${encodeURIComponent(req.staff)}`, patch);
+    }
+  }
+  showToast(status === '承認済み' ? '承認しました' : '却下しました');
+  loadLeaveReview();
 }
 
 function renderStatus() {
