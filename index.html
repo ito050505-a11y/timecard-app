@@ -342,7 +342,7 @@
           <input type="checkbox" id="sf-leave" onchange="toggleHireDateField()" style="width:18px;height:18px;min-width:18px;min-height:18px;flex-shrink:0;margin:2px 0 0 0;box-sizing:border-box;">
           <label for="sf-leave" style="font-size:13px;color:#374151;line-height:1.4;">有給休暇の対象（正社員など）</label>
         </div>
-        <div class="form-group" id="sf-hire-group" style="display:none;">
+        <div class="form-group" id="sf-hire-group">
           <div class="form-label">入社日</div>
           <input type="date" id="sf-hire-date" class="form-input" onchange="showGrantPreview()">
           <div id="sf-grant-preview" style="font-size:12px;color:#0f766e;margin-top:6px;font-weight:700;"></div>
@@ -939,15 +939,14 @@ function formatGrantAlert(hireDateStr) {
 }
 
 function toggleHireDateField() {
-  const show = document.getElementById('sf-leave').checked;
-  document.getElementById('sf-hire-group').style.display = show ? 'block' : 'none';
   showGrantPreview();
 }
 
 function showGrantPreview() {
   const hireDate = document.getElementById('sf-hire-date').value;
   const el = document.getElementById('sf-grant-preview');
-  if (!hireDate) { el.textContent = ''; return; }
+  const isLeaveEligible = document.getElementById('sf-leave').checked;
+  if (!hireDate || !isLeaveEligible) { el.textContent = ''; return; }
   const info = formatGrantAlert(hireDate);
   el.textContent = info ? info.label.replace('⚠️ ', '') : '';
 }
@@ -981,7 +980,7 @@ async function saveStaffMember() {
   const hireDate = document.getElementById('sf-hire-date').value || null;
   if (!name || !pin) { showToast('名前とパスワードを入力してね', true); return; }
 
-  const body = { name, pin, store, display_order: displayOrder, is_owner: isOwnerChecked, leave_eligible: leaveEligibleChecked, hire_date: leaveEligibleChecked ? hireDate : null };
+  const body = { name, pin, store, display_order: displayOrder, is_owner: isOwnerChecked, leave_eligible: leaveEligibleChecked, hire_date: hireDate };
 
   if (editingStaffId) {
     await api('PATCH', `staff_members?id=eq.${editingStaffId}`, body);
@@ -1036,6 +1035,7 @@ function renderStaffManageList() {
         <div style="font-size:15px;font-weight:700;color:#111;">${s.name}</div>
       </div>
       <div>${tags.join('')}</div>
+      ${s.hireDate && !s.leaveEligible ? `<div style="font-size:11px;color:#9ca3af;margin-top:8px;">入社日：${s.hireDate}</div>` : ''}
       ${grantInfo ? `<div style="font-size:12px;margin-top:8px;font-weight:700;color:${grantInfo.isAlert ? '#ef4444' : '#9ca3af'};">${grantInfo.label}</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button onclick='openStaffForm(${JSON.stringify(s)})' style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;color:#6b7280;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️ 編集</button>
