@@ -330,13 +330,13 @@
             <option value="allum">allum</option>
           </select>
         </div>
-        <div class="form-group" style="display:flex;align-items:center;gap:8px;">
-          <input type="checkbox" id="sf-owner" style="width:18px;height:18px;">
-          <label for="sf-owner" style="font-size:13px;color:#374151;">オーナー権限（月間集計・記録修正・有給管理・スタッフ管理が使えます）</label>
+        <div class="form-group" style="display:flex;align-items:flex-start;gap:8px;">
+          <input type="checkbox" id="sf-owner" style="width:18px;height:18px;min-width:18px;min-height:18px;flex-shrink:0;margin:2px 0 0 0;box-sizing:border-box;">
+          <label for="sf-owner" style="font-size:13px;color:#374151;line-height:1.4;">オーナー権限（月間集計・記録修正・有給管理・スタッフ管理が使えます）</label>
         </div>
-        <div class="form-group" style="display:flex;align-items:center;gap:8px;">
-          <input type="checkbox" id="sf-leave" onchange="toggleHireDateField()" style="width:18px;height:18px;">
-          <label for="sf-leave" style="font-size:13px;color:#374151;">有給休暇の対象（正社員など）</label>
+        <div class="form-group" style="display:flex;align-items:flex-start;gap:8px;">
+          <input type="checkbox" id="sf-leave" onchange="toggleHireDateField()" style="width:18px;height:18px;min-width:18px;min-height:18px;flex-shrink:0;margin:2px 0 0 0;box-sizing:border-box;">
+          <label for="sf-leave" style="font-size:13px;color:#374151;line-height:1.4;">有給休暇の対象（正社員など）</label>
         </div>
         <div class="form-group" id="sf-hire-group" style="display:none;">
           <div class="form-label">入社日</div>
