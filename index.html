@@ -137,6 +137,7 @@
     <button class="tab" id="tab-btn-summary" onclick="switchMainTab('summary')">月間集計</button>
     <button class="tab" id="tab-btn-admin" onclick="switchMainTab('admin')">記録修正</button>
     <button class="tab" id="tab-btn-leave-review" onclick="switchMainTab('leave_review')">有給管理</button>
+    <button class="tab" id="tab-btn-staff-manage" onclick="switchMainTab('staff_manage')">スタッフ管理</button>
   </div>
 
   <!-- 打刻タブ -->
@@ -307,6 +308,52 @@
     <div id="leave-history-review-list"><div class="empty">読み込み中...</div></div>
   </div>
 
+  <!-- スタッフ管理タブ（オーナー専用） -->
+  <div id="main-staff_manage" class="content" style="padding:0;">
+    <button class="btn-add" onclick="openStaffForm(null)" style="width:100%;padding:14px;border-radius:12px;border:2px dashed #6ee7b7;background:#fff;color:#065f46;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:14px;font-family:inherit;">＋ 新しいスタッフを追加</button>
+
+    <div id="staff-form-card" style="display:none;">
+      <div class="form-card">
+        <div class="form-title" id="staff-form-title" style="font-size:15px;font-weight:700;color:#065f46;margin-bottom:16px;">スタッフを追加</div>
+        <div class="form-group">
+          <div class="form-label">名前</div>
+          <input type="text" id="sf-name" class="form-input" placeholder="例：山田花子">
+        </div>
+        <div class="form-group">
+          <div class="form-label">パスワード（ログイン用の数字）</div>
+          <input type="text" id="sf-pin" class="form-input" placeholder="例：1234">
+        </div>
+        <div class="form-group">
+          <div class="form-label">店舗</div>
+          <select id="sf-store" class="form-input">
+            <option value="燈乃工房">燈乃工房</option>
+            <option value="allum">allum</option>
+          </select>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="sf-owner" style="width:18px;height:18px;">
+          <label for="sf-owner" style="font-size:13px;color:#374151;">オーナー権限（月間集計・記録修正・有給管理・スタッフ管理が使えます）</label>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="sf-leave" onchange="toggleHireDateField()" style="width:18px;height:18px;">
+          <label for="sf-leave" style="font-size:13px;color:#374151;">有給休暇の対象（正社員など）</label>
+        </div>
+        <div class="form-group" id="sf-hire-group" style="display:none;">
+          <div class="form-label">入社日</div>
+          <input type="date" id="sf-hire-date" class="form-input" onchange="showGrantPreview()">
+          <div id="sf-grant-preview" style="font-size:12px;color:#0f766e;margin-top:6px;font-weight:700;"></div>
+        </div>
+        <div class="form-btns" style="display:flex;gap:8px;margin-top:4px;">
+          <button class="btn-cancel" onclick="closeStaffForm()" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #e5e7eb;background:#fff;color:#6b7280;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">キャンセル</button>
+          <button class="btn-submit" onclick="saveStaffMember()" style="flex:2;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#6ee7b7,#059669);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">保存する</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:#b0b0b0;font-weight:700;margin:16px 0 10px;">スタッフ一覧</div>
+    <div id="staff-manage-list"><div class="empty">読み込み中...</div></div>
+  </div>
+
   <!-- 月間集計タブ -->
   <div id="main-summary" class="content" style="padding:0;">
     <div class="filter-row">
@@ -340,15 +387,7 @@ const SUPABASE_URL = 'https://mdqzseflgmesziiwhdif.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kcXpzZWZsZ21lc3ppaXdoZGlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjYzMzgsImV4cCI6MjA5NjA0MjMzOH0.f8xnZ-dxxbg-PY6Ev-5sOi_EyoV3FHfaybSWyR3rZ-4';
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxh63i_pNpIr5v1dG4bnCUef4kzWdBIJWl5HD6U-Qp6olBpoyaZlZ3LIbUt-vKIZ74vog/exec';
 
-const STAFF = [
-  { name: '伊藤美里', pin: '0520', store: '燈乃工房', isOwner: true },
-  { name: '関岡典洋', pin: '1017', store: '燈乃工房', leaveEligible: true },
-  { name: '濵野葵生', pin: '0122', store: '燈乃工房', leaveEligible: true },
-  { name: '福村拓也', pin: '1000512', store: 'allum' },
-  { name: '廣田香寿実', pin: '3000530', store: 'allum' },
-  { name: '大山なつみ', pin: '3000511', store: 'allum' },
-  { name: '大西咲良', pin: '2000313', store: 'allum', leaveEligible: true }
-];
+let STAFF = [];
 const LEAVE_TYPES = ['全休', '半休', '時間'];
 const HOURLY_LEAVE_LIMIT = 40; // 年5日分（8時間×5日）まで時間単位OK
 
@@ -407,6 +446,14 @@ function setLoginStore(store) {
   renderLoginNameOptions();
 }
 
+async function loadStaffMembers() {
+  const res = await api('GET', 'staff_members?order=store.asc,name.asc');
+  STAFF = (res || []).map(s => ({
+    id: s.id, name: s.name, pin: s.pin, store: s.store,
+    isOwner: s.is_owner, leaveEligible: s.leave_eligible, hireDate: s.hire_date
+  }));
+}
+
 function renderLoginNameOptions() {
   const sel = document.getElementById('login-name');
   sel.innerHTML = '';
@@ -421,6 +468,7 @@ function initLoginOptions() {
   renderLoginNameOptions();
   const sumSel = document.getElementById('sum-staff');
   const adminSel = document.getElementById('admin-staff');
+  sumSel.innerHTML = ''; adminSel.innerHTML = '';
   STAFF.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.name; opt.textContent = s.name;
@@ -452,6 +500,7 @@ function tryLogin() {
   document.getElementById('tab-btn-summary').style.display = staff.isOwner ? '' : 'none';
   document.getElementById('tab-btn-admin').style.display = staff.isOwner ? '' : 'none';
   document.getElementById('tab-btn-leave-review').style.display = staff.isOwner ? '' : 'none';
+  document.getElementById('tab-btn-staff-manage').style.display = staff.isOwner ? '' : 'none';
   document.getElementById('tab-btn-leave').style.display = staff.leaveEligible ? '' : 'none';
   document.getElementById('screen-login').classList.remove('active');
   document.getElementById('screen-main').classList.add('active');
@@ -470,6 +519,7 @@ function logout() {
   document.getElementById('main-admin').classList.remove('active');
   document.getElementById('main-leave').classList.remove('active');
   document.getElementById('main-leave_review').classList.remove('active');
+  document.getElementById('main-staff_manage').classList.remove('active');
   document.getElementById('screen-main').classList.remove('active');
   document.getElementById('screen-login').classList.add('active');
   document.getElementById('login-pin').value = '';
@@ -484,11 +534,13 @@ function switchMainTab(name) {
   document.getElementById('main-admin').classList.remove('active');
   document.getElementById('main-leave').classList.remove('active');
   document.getElementById('main-leave_review').classList.remove('active');
+  document.getElementById('main-staff_manage').classList.remove('active');
   document.getElementById('main-' + name).classList.add('active');
   if (name === 'summary') loadSummary();
   if (name === 'status') loadStaffStatus();
   if (name === 'leave') loadLeaveTab();
   if (name === 'leave_review') loadLeaveReview();
+  if (name === 'staff_manage') loadStaffManage();
   if (name === 'admin') {
     if (!document.getElementById('admin-date').value) {
       document.getElementById('admin-date').value = todayStr();
@@ -846,6 +898,143 @@ async function cancelApprovedLeave(id) {
   loadLeaveReview();
 }
 
+// ---- スタッフ管理（オーナー専用） ----
+let editingStaffId = null;
+
+function computeNextGrantDate(hireDateStr) {
+  if (!hireDateStr) return null;
+  const hire = new Date(hireDateStr + 'T00:00:00');
+  const first = new Date(hire);
+  first.setMonth(first.getMonth() + 6);
+  const today = new Date(todayStr() + 'T00:00:00');
+  const windowStart = new Date(today);
+  windowStart.setDate(windowStart.getDate() - 30);
+  let candidate = new Date(first);
+  let guard = 0;
+  while (candidate < windowStart && guard < 30) {
+    candidate.setFullYear(candidate.getFullYear() + 1);
+    guard++;
+  }
+  return candidate;
+}
+
+function formatGrantAlert(hireDateStr) {
+  const grantDate = computeNextGrantDate(hireDateStr);
+  if (!grantDate) return null;
+  const today = new Date(todayStr() + 'T00:00:00');
+  const diffDays = Math.round((grantDate - today) / (1000 * 60 * 60 * 24));
+  const dateStr = `${grantDate.getFullYear()}-${pad(grantDate.getMonth()+1)}-${pad(grantDate.getDate())}`;
+  const isAlert = diffDays <= 30;
+  let label;
+  if (diffDays > 30) label = `次回付与日：${dateStr}`;
+  else if (diffDays > 0) label = `⚠️ あと${diffDays}日で付与日（${dateStr}）`;
+  else if (diffDays === 0) label = `⚠️ 本日が付与日です（${dateStr}）`;
+  else label = `⚠️ 付与日を過ぎています（${dateStr}）`;
+  return { label, isAlert };
+}
+
+function toggleHireDateField() {
+  const show = document.getElementById('sf-leave').checked;
+  document.getElementById('sf-hire-group').style.display = show ? 'block' : 'none';
+  showGrantPreview();
+}
+
+function showGrantPreview() {
+  const hireDate = document.getElementById('sf-hire-date').value;
+  const el = document.getElementById('sf-grant-preview');
+  if (!hireDate) { el.textContent = ''; return; }
+  const info = formatGrantAlert(hireDate);
+  el.textContent = info ? info.label.replace('⚠️ ', '') : '';
+}
+
+function openStaffForm(staff) {
+  editingStaffId = staff ? staff.id : null;
+  document.getElementById('staff-form-title').textContent = staff ? 'スタッフを編集' : 'スタッフを追加';
+  document.getElementById('sf-name').value = staff ? staff.name : '';
+  document.getElementById('sf-pin').value = staff ? staff.pin : '';
+  document.getElementById('sf-store').value = staff ? staff.store : '燈乃工房';
+  document.getElementById('sf-owner').checked = staff ? !!staff.isOwner : false;
+  document.getElementById('sf-leave').checked = staff ? !!staff.leaveEligible : false;
+  document.getElementById('sf-hire-date').value = staff && staff.hireDate ? staff.hireDate : '';
+  toggleHireDateField();
+  document.getElementById('staff-form-card').style.display = 'block';
+}
+
+function closeStaffForm() {
+  document.getElementById('staff-form-card').style.display = 'none';
+  editingStaffId = null;
+}
+
+async function saveStaffMember() {
+  const name = document.getElementById('sf-name').value.trim();
+  const pin = document.getElementById('sf-pin').value.trim();
+  const store = document.getElementById('sf-store').value;
+  const isOwnerChecked = document.getElementById('sf-owner').checked;
+  const leaveEligibleChecked = document.getElementById('sf-leave').checked;
+  const hireDate = document.getElementById('sf-hire-date').value || null;
+  if (!name || !pin) { showToast('名前とパスワードを入力してね', true); return; }
+
+  const body = { name, pin, store, is_owner: isOwnerChecked, leave_eligible: leaveEligibleChecked, hire_date: leaveEligibleChecked ? hireDate : null };
+
+  if (editingStaffId) {
+    await api('PATCH', `staff_members?id=eq.${editingStaffId}`, body);
+  } else {
+    await api('POST', 'staff_members', body);
+  }
+
+  // 有給対象になったのに leave_balances が無ければ作成
+  if (leaveEligibleChecked) {
+    const existing = await api('GET', `leave_balances?staff=eq.${encodeURIComponent(name)}`);
+    if (!existing || existing.length === 0) {
+      await api('POST', 'leave_balances', { staff: name, hire_date: hireDate, granted_days: 0, used_days: 0, hourly_used_this_year: 0 });
+    } else if (hireDate) {
+      await api('PATCH', `leave_balances?staff=eq.${encodeURIComponent(name)}`, { hire_date: hireDate, updated_at: new Date().toISOString() });
+    }
+  }
+
+  showToast('保存しました');
+  closeStaffForm();
+  await loadStaffMembers();
+  initLoginOptions();
+  loadStaffManage();
+}
+
+async function deleteStaffMemberConfirm(id, name) {
+  if (!confirm(`${name}さんを削除しますか？打刻や有給の過去データは残りますが、ログインはできなくなります。`)) return;
+  await api('DELETE', `staff_members?id=eq.${id}`);
+  showToast('削除しました');
+  await loadStaffMembers();
+  initLoginOptions();
+  loadStaffManage();
+}
+
+async function loadStaffManage() {
+  await loadStaffMembers();
+  renderStaffManageList();
+}
+
+function renderStaffManageList() {
+  const el = document.getElementById('staff-manage-list');
+  if (!STAFF.length) { el.innerHTML = '<div class="empty">スタッフがいません</div>'; return; }
+  el.innerHTML = STAFF.map(s => {
+    const tagStyle = 'display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-right:6px;margin-top:4px;';
+    const tags = [];
+    if (s.isOwner) tags.push(`<span style="${tagStyle}background:#ccfbf1;color:#0f766e;">オーナー</span>`);
+    tags.push(`<span style="${tagStyle}background:#f3f4f6;color:#6b7280;">${s.store}</span>`);
+    if (s.leaveEligible) tags.push(`<span style="${tagStyle}background:#e0f2fe;color:#0369a1;">有給対象</span>`);
+    const grantInfo = s.leaveEligible ? formatGrantAlert(s.hireDate) : null;
+    return `<div class="form-card" style="margin-bottom:8px;">
+      <div style="font-size:15px;font-weight:700;color:#111;margin-bottom:2px;">${s.name}</div>
+      <div>${tags.join('')}</div>
+      ${grantInfo ? `<div style="font-size:12px;margin-top:8px;font-weight:700;color:${grantInfo.isAlert ? '#ef4444' : '#9ca3af'};">${grantInfo.label}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button onclick='openStaffForm(${JSON.stringify(s)})' style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;color:#6b7280;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️ 編集</button>
+        <button onclick="deleteStaffMemberConfirm('${s.id}','${s.name}')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #fecaca;background:#fff5f5;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">🗑️ 削除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderLeavePending(list) {
   const el = document.getElementById('leave-pending-list');
   if (!list.length) { el.innerHTML = '<div class="empty">承認待ちの申請はありません 🎉</div>'; return; }
@@ -1114,7 +1303,10 @@ function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
-initLoginOptions();
+(async () => {
+  await loadStaffMembers();
+  initLoginOptions();
+})();
 </script>
 </body>
 </html>
