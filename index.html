@@ -330,6 +330,10 @@
             <option value="allum">allum</option>
           </select>
         </div>
+        <div class="form-group">
+          <div class="form-label">表示順（数字が小さいほど上に表示されます）</div>
+          <input type="number" id="sf-order" class="form-input" placeholder="例：1">
+        </div>
         <div class="form-group" style="display:flex;align-items:flex-start;gap:8px;">
           <input type="checkbox" id="sf-owner" style="width:18px;height:18px;min-width:18px;min-height:18px;flex-shrink:0;margin:2px 0 0 0;box-sizing:border-box;">
           <label for="sf-owner" style="font-size:13px;color:#374151;line-height:1.4;">オーナー権限（月間集計・記録修正・有給管理・スタッフ管理が使えます）</label>
@@ -447,10 +451,11 @@ function setLoginStore(store) {
 }
 
 async function loadStaffMembers() {
-  const res = await api('GET', 'staff_members?order=store.asc,name.asc');
+  const res = await api('GET', 'staff_members?order=display_order.asc,name.asc');
   STAFF = (res || []).map(s => ({
     id: s.id, name: s.name, pin: s.pin, store: s.store,
-    isOwner: s.is_owner, leaveEligible: s.leave_eligible, hireDate: s.hire_date
+    isOwner: s.is_owner, leaveEligible: s.leave_eligible, hireDate: s.hire_date,
+    displayOrder: s.display_order != null ? s.display_order : 999
   }));
 }
 
@@ -953,6 +958,7 @@ function openStaffForm(staff) {
   document.getElementById('sf-name').value = staff ? staff.name : '';
   document.getElementById('sf-pin').value = staff ? staff.pin : '';
   document.getElementById('sf-store').value = staff ? staff.store : '燈乃工房';
+  document.getElementById('sf-order').value = staff ? staff.displayOrder : 999;
   document.getElementById('sf-owner').checked = staff ? !!staff.isOwner : false;
   document.getElementById('sf-leave').checked = staff ? !!staff.leaveEligible : false;
   document.getElementById('sf-hire-date').value = staff && staff.hireDate ? staff.hireDate : '';
@@ -969,12 +975,13 @@ async function saveStaffMember() {
   const name = document.getElementById('sf-name').value.trim();
   const pin = document.getElementById('sf-pin').value.trim();
   const store = document.getElementById('sf-store').value;
+  const displayOrder = Number(document.getElementById('sf-order').value) || 999;
   const isOwnerChecked = document.getElementById('sf-owner').checked;
   const leaveEligibleChecked = document.getElementById('sf-leave').checked;
   const hireDate = document.getElementById('sf-hire-date').value || null;
   if (!name || !pin) { showToast('名前とパスワードを入力してね', true); return; }
 
-  const body = { name, pin, store, is_owner: isOwnerChecked, leave_eligible: leaveEligibleChecked, hire_date: leaveEligibleChecked ? hireDate : null };
+  const body = { name, pin, store, display_order: displayOrder, is_owner: isOwnerChecked, leave_eligible: leaveEligibleChecked, hire_date: leaveEligibleChecked ? hireDate : null };
 
   if (editingStaffId) {
     await api('PATCH', `staff_members?id=eq.${editingStaffId}`, body);
@@ -1024,7 +1031,10 @@ function renderStaffManageList() {
     if (s.leaveEligible) tags.push(`<span style="${tagStyle}background:#e0f2fe;color:#0369a1;">有給対象</span>`);
     const grantInfo = s.leaveEligible ? formatGrantAlert(s.hireDate) : null;
     return `<div class="form-card" style="margin-bottom:8px;">
-      <div style="font-size:15px;font-weight:700;color:#111;margin-bottom:2px;">${s.name}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+        <span style="font-size:11px;font-weight:800;color:#fff;background:#9ca3af;border-radius:6px;padding:1px 7px;">${s.displayOrder}</span>
+        <div style="font-size:15px;font-weight:700;color:#111;">${s.name}</div>
+      </div>
       <div>${tags.join('')}</div>
       ${grantInfo ? `<div style="font-size:12px;margin-top:8px;font-weight:700;color:${grantInfo.isAlert ? '#ef4444' : '#9ca3af'};">${grantInfo.label}</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:12px;">
