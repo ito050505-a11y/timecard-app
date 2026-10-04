@@ -43,6 +43,8 @@
   .status-break { background: #fffbeb; color: #d97706; }
   .status-out { background: #eff6ff; color: #2563eb; }
   .status-off { background: #f3f4f6; color: #9ca3af; }
+  .break-summary { background: #fffbeb; border: 1.5px solid #fde68a; color: #92400e; border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 700; margin: -6px 0 16px; line-height: 1.6; }
+  .break-summary .big { font-size: 20px; font-weight: 800; color: #d97706; }
 
   .verify-row { display: flex; gap: 8px; margin-bottom: 14px; }
   .verify-btn { flex: 1; padding: 12px 8px; border-radius: 12px; border: 1.5px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 700; color: #888; cursor: pointer; font-family: inherit; }
@@ -90,7 +92,9 @@
   .admin-outing-row .ao-line { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
   .admin-outing-row .form-input { padding: 9px 10px; font-size: 14px; }
   .admin-outing-del { padding: 9px 10px; border-radius: 10px; border: 1.5px solid #fecaca; background: #fff5f5; color: #ef4444; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .admin-outing-row.is-break { border-color: #fde68a; background: #fffdf5; }
   .admin-add-outing { width: 100%; padding: 10px; border-radius: 10px; border: 1.5px dashed #93c5fd; background: #fff; color: #2563eb; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .admin-add-break { border-color: #fcd34d; color: #d97706; margin-bottom: 0; }
 
   .empty { text-align: center; color: #c4c4c4; padding: 30px; font-size: 13px; }
   .footer-note { text-align: center; font-size: 11px; color: #c4c4c4; margin-top: 20px; }
@@ -169,6 +173,7 @@
       <div class="now-time" id="now-time">--:--</div>
       <div class="now-date" id="now-date">-</div>
       <div class="status-badge status-off" id="status-badge">読み込み中...</div>
+      <div class="break-summary" id="break-summary" style="display:none;"></div>
 
       <div class="verify-row">
         <button class="verify-btn" id="verify-gps-btn" onclick="checkGPS()">📍 位置情報を確認</button>
@@ -228,20 +233,15 @@
           <input type="time" id="admin-clockout" class="form-input">
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <div class="form-label">休憩開始</div>
-          <input type="time" id="admin-breakstart" class="form-input">
-        </div>
-        <div class="form-group">
-          <div class="form-label">休憩終了</div>
-          <input type="time" id="admin-breakend" class="form-input">
-        </div>
+      <div class="form-group">
+        <div class="form-label">休憩（何回でも追加できます。勤務時間から引かれます）</div>
+        <div id="admin-breaks"></div>
+        <button type="button" class="admin-add-outing admin-add-break" onclick="addAdminRow('breaks')">＋ 休憩を追加</button>
       </div>
       <div class="form-group">
         <div class="form-label">外出（何回でも追加できます。外出中も勤務時間に含まれます）</div>
         <div id="admin-outings"></div>
-        <button type="button" class="admin-add-outing" onclick="addAdminOutingRow()">＋ 外出を追加</button>
+        <button type="button" class="admin-add-outing" onclick="addAdminRow('outings')">＋ 外出を追加</button>
       </div>
       <button class="btn-save" onclick="saveAdminEntry()">保存する</button>
       <button class="btn-delete-item" id="admin-delete-btn" style="width:100%;padding:12px;border-radius:12px;border:1.5px solid #fecaca;background:#fff5f5;color:#ef4444;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px;display:none;" onclick="deleteAdminEntry()">🗑️ この日の記録を削除</button>
@@ -423,6 +423,7 @@ let gpsVerified = false;
 let qrVerified = false;
 let todayEntry = null;
 let todayOutings = [];   // 本日の外出記録（何回でも）
+let todayBreaks = [];    // 本日の休憩記録（何回でも）
 let qrStream = null;
 
 function showToast(msg, isError) {
@@ -461,6 +462,12 @@ async function api(method, path, body) {
 
 // ---- 外出まわりの共通関数 ----
 function asList(res) { return Array.isArray(res) ? res : []; }
+function findOpenBreak(list) { return asList(list).find(b => b.break_start && !b.break_end) || null; }
+function breakMinutes(list) {
+  return asList(list)
+    .filter(b => b.break_start && b.break_end)
+    .reduce((sum, b) => sum + Math.max(0, timeToMinutes(b.break_end) - timeToMinutes(b.break_start)), 0);
+}
 function findOpenOuting(list) { return asList(list).find(o => o.out_start && !o.out_end) || null; }
 function outingMinutes(list) {
   return asList(list)
@@ -542,6 +549,8 @@ function logout() {
   currentStaff = null;
   gpsVerified = false; qrVerified = false;
   todayOutings = [];
+  todayBreaks = [];
+  renderBreakSummary();
   document.querySelectorAll('#screen-main .tab').forEach(t => t.classList.remove('active'));
   document.querySelector('#screen-main .tab').classList.add('active');
   document.getElementById('main-clock').classList.add('active');
@@ -595,7 +604,7 @@ function tickClock() {
   const days = ['日','月','火','水','木','金','土'];
   document.getElementById('now-date').textContent = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
 }
-setInterval(tickClock, 1000);
+setInterval(() => { tickClock(); if (findOpenBreak(todayBreaks)) renderBreakSummary(); }, 1000);
 tickClock();
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -684,11 +693,13 @@ async function loadTodayEntry() {
   if (!currentStaff) return;
   const date = todayStr();
   const name = encodeURIComponent(currentStaff.name);
-  const [res, outs] = await Promise.all([
+  const [res, brks, outs] = await Promise.all([
     api('GET', `time_entries?staff_name=eq.${name}&work_date=eq.${date}`),
+    api('GET', `breaks?staff_name=eq.${name}&work_date=eq.${date}&order=break_start.asc`),
     api('GET', `outings?staff_name=eq.${name}&work_date=eq.${date}&order=out_start.asc`)
   ]);
   todayEntry = asList(res)[0] || null;
+  todayBreaks = asList(brks);
   todayOutings = asList(outs);
   renderStatus();
   renderTodayLog();
@@ -700,11 +711,13 @@ async function loadStaffStatus() {
   el.innerHTML = '<div class="empty">読み込み中...</div>';
   const storeFilter = document.getElementById('status-store-filter').value;
   const date = todayStr();
-  const [resRaw, outsRaw] = await Promise.all([
+  const [resRaw, brksRaw, outsRaw] = await Promise.all([
     api('GET', `time_entries?work_date=eq.${date}`),
+    api('GET', `breaks?work_date=eq.${date}&order=break_start.asc`),
     api('GET', `outings?work_date=eq.${date}&order=out_start.asc`)
   ]);
   const res = asList(resRaw);
+  const brks = asList(brksRaw);
   const outs = asList(outsRaw);
 
   const targetStaff = STAFF.filter(s => !storeFilter || s.store === storeFilter);
@@ -714,19 +727,22 @@ async function loadStaffStatus() {
     const e = res.find(r => r.staff_name === s.name);
     const myOuts = outs.filter(o => o.staff_name === s.name);
     const openOut = findOpenOuting(myOuts);
+    const myBreaks = brks.filter(b => b.staff_name === s.name);
+    const openBreak = findOpenBreak(myBreaks);
     let badgeClass = 'status-off', badgeText = '⚪ 未出勤', timesText = '-';
 
     if (e && e.clock_in && !e.clock_out) {
       if (openOut) {
         badgeClass = 'status-out'; badgeText = '🚶 外出中';
         timesText = `出勤 ${e.clock_in.slice(0,5)}　外出 ${openOut.out_start.slice(0,5)}〜`;
-      } else if (e.break_start && !e.break_end) {
+      } else if (openBreak) {
         badgeClass = 'status-break'; badgeText = '☕ 休憩中';
-        timesText = `出勤 ${e.clock_in.slice(0,5)}　休憩開始 ${e.break_start.slice(0,5)}`;
+        timesText = `出勤 ${e.clock_in.slice(0,5)}　休憩開始 ${openBreak.break_start.slice(0,5)}`;
       } else {
         badgeClass = 'status-working'; badgeText = '🟢 勤務中';
         timesText = `出勤 ${e.clock_in.slice(0,5)}`;
-        if (e.break_start && e.break_end) timesText += `　休憩 ${e.break_start.slice(0,5)}〜${e.break_end.slice(0,5)}`;
+        const doneBreaks = myBreaks.filter(b => b.break_end).length;
+        if (doneBreaks) timesText += `　休憩${doneBreaks}回`;
         const doneOuts = myOuts.filter(o => o.out_end).length;
         if (doneOuts) timesText += `　外出${doneOuts}回`;
       }
@@ -747,15 +763,28 @@ async function loadStaffStatus() {
 }
 
 let adminEntryId = null;
-let adminOutings = [];
+const ADMIN_KINDS = {
+  breaks:  { table: 'breaks',  startKey: 'break_start', endKey: 'break_end', label: '休憩', rowClass: 'admin-outing-row is-break' },
+  outings: { table: 'outings', startKey: 'out_start',   endKey: 'out_end',   label: '外出', rowClass: 'admin-outing-row' }
+};
+const adminLists = { breaks: [], outings: [] };
+
+function toAdminRows(list, k) {
+  return asList(list).map(r => ({
+    id: r.id,
+    start: r[k.startKey] ? r[k.startKey].slice(0,5) : '',
+    end: r[k.endKey] ? r[k.endKey].slice(0,5) : ''
+  }));
+}
 
 async function loadAdminEntry() {
   const staffName = document.getElementById('admin-staff').value;
   const date = document.getElementById('admin-date').value;
   if (!staffName || !date) return;
   const name = encodeURIComponent(staffName);
-  const [res, outs] = await Promise.all([
+  const [res, brks, outs] = await Promise.all([
     api('GET', `time_entries?staff_name=eq.${name}&work_date=eq.${date}`),
+    api('GET', `breaks?staff_name=eq.${name}&work_date=eq.${date}&order=break_start.asc`),
     api('GET', `outings?staff_name=eq.${name}&work_date=eq.${date}&order=out_start.asc`)
   ]);
   const e = asList(res)[0];
@@ -764,61 +793,61 @@ async function loadAdminEntry() {
   document.getElementById('admin-store').value = e ? e.store : (staffInfo ? staffInfo.store : '燈乃工房');
   document.getElementById('admin-clockin').value = e && e.clock_in ? e.clock_in.slice(0,5) : '';
   document.getElementById('admin-clockout').value = e && e.clock_out ? e.clock_out.slice(0,5) : '';
-  document.getElementById('admin-breakstart').value = e && e.break_start ? e.break_start.slice(0,5) : '';
-  document.getElementById('admin-breakend').value = e && e.break_end ? e.break_end.slice(0,5) : '';
   document.getElementById('admin-delete-btn').style.display = e ? 'block' : 'none';
 
-  adminOutings = asList(outs).map(o => ({
-    id: o.id,
-    out_start: o.out_start ? o.out_start.slice(0,5) : '',
-    out_end: o.out_end ? o.out_end.slice(0,5) : ''
-  }));
-  renderAdminOutings();
+  adminLists.breaks = toAdminRows(brks, ADMIN_KINDS.breaks);
+  adminLists.outings = toAdminRows(outs, ADMIN_KINDS.outings);
+  renderAdminList('breaks');
+  renderAdminList('outings');
 }
 
-function renderAdminOutings() {
-  const el = document.getElementById('admin-outings');
-  if (!adminOutings.length) {
-    el.innerHTML = '<div class="hint" style="margin-bottom:8px;">この日の外出記録はありません</div>';
+function renderAdminList(kind) {
+  const k = ADMIN_KINDS[kind];
+  const list = adminLists[kind];
+  const el = document.getElementById('admin-' + kind);
+  if (!list.length) {
+    el.innerHTML = `<div class="hint" style="margin-bottom:8px;">この日の${k.label}記録はありません</div>`;
     return;
   }
-  el.innerHTML = adminOutings.map((o, i) => `
-    <div class="admin-outing-row" data-idx="${i}">
+  el.innerHTML = list.map((r, i) => `
+    <div class="${k.rowClass}" data-idx="${i}">
       <div class="ao-line" style="margin-top:0;">
-        <input type="time" class="form-input ao-start" value="${o.out_start}">
+        <input type="time" class="form-input ao-start" value="${r.start}">
         <span style="color:#9ca3af;">〜</span>
-        <input type="time" class="form-input ao-end" value="${o.out_end}">
-        <button type="button" class="admin-outing-del" onclick="removeAdminOutingRow(${i})">削除</button>
+        <input type="time" class="form-input ao-end" value="${r.end}">
+        <button type="button" class="admin-outing-del" onclick="removeAdminRow('${kind}', ${i})">削除</button>
       </div>
     </div>`).join('');
 }
 
-function collectAdminOutings() {
-  document.querySelectorAll('#admin-outings .admin-outing-row').forEach(row => {
+function collectAdminList(kind) {
+  document.querySelectorAll(`#admin-${kind} .admin-outing-row`).forEach(row => {
     const i = Number(row.dataset.idx);
-    if (!adminOutings[i]) return;
-    adminOutings[i].out_start = row.querySelector('.ao-start').value;
-    adminOutings[i].out_end = row.querySelector('.ao-end').value;
+    const item = adminLists[kind][i];
+    if (!item) return;
+    item.start = row.querySelector('.ao-start').value;
+    item.end = row.querySelector('.ao-end').value;
   });
 }
 
-function addAdminOutingRow() {
-  collectAdminOutings();
-  adminOutings.push({ id: null, out_start: '', out_end: '' });
-  renderAdminOutings();
+function addAdminRow(kind) {
+  collectAdminList(kind);
+  adminLists[kind].push({ id: null, start: '', end: '' });
+  renderAdminList(kind);
 }
 
-async function removeAdminOutingRow(i) {
-  collectAdminOutings();
-  const o = adminOutings[i];
-  if (!o) return;
-  if (o.id) {
-    if (!confirm('この外出記録を削除しますか？元に戻せません。')) return;
-    await api('DELETE', `outings?id=eq.${o.id}`);
-    showToast('外出記録を削除しました');
+async function removeAdminRow(kind, i) {
+  const k = ADMIN_KINDS[kind];
+  collectAdminList(kind);
+  const item = adminLists[kind][i];
+  if (!item) return;
+  if (item.id) {
+    if (!confirm(`この${k.label}記録を削除しますか？元に戻せません。`)) return;
+    await api('DELETE', `${k.table}?id=eq.${item.id}`);
+    showToast(`${k.label}記録を削除しました`);
   }
-  adminOutings.splice(i, 1);
-  renderAdminOutings();
+  adminLists[kind].splice(i, 1);
+  renderAdminList(kind);
 }
 
 async function saveAdminEntry() {
@@ -826,11 +855,13 @@ async function saveAdminEntry() {
   const date = document.getElementById('admin-date').value;
   if (!staffName || !date) { showToast('スタッフと日付を選んでね', true); return; }
 
-  collectAdminOutings();
-  for (const o of adminOutings) {
-    if (o.out_start && o.out_end && timeToMinutes(o.out_end) < timeToMinutes(o.out_start)) {
-      showToast('外出の戻り時刻が出発時刻より前になっています', true);
-      return;
+  for (const kind of ['breaks', 'outings']) {
+    collectAdminList(kind);
+    for (const r of adminLists[kind]) {
+      if (r.start && r.end && timeToMinutes(r.end) < timeToMinutes(r.start)) {
+        showToast(`${ADMIN_KINDS[kind].label}の終わりの時刻が始まりより前になっています`, true);
+        return;
+      }
     }
   }
 
@@ -840,9 +871,7 @@ async function saveAdminEntry() {
     work_date: date,
     store,
     clock_in: document.getElementById('admin-clockin').value || null,
-    clock_out: document.getElementById('admin-clockout').value || null,
-    break_start: document.getElementById('admin-breakstart').value || null,
-    break_end: document.getElementById('admin-breakend').value || null
+    clock_out: document.getElementById('admin-clockout').value || null
   };
 
   if (adminEntryId) {
@@ -851,15 +880,17 @@ async function saveAdminEntry() {
     await api('POST', 'time_entries', body);
   }
 
-  // 外出記録の保存（出発時刻が空の行は保存しない）
-  for (const o of adminOutings) {
-    if (!o.out_start) continue;
-    const ob = {
-      staff_name: staffName, work_date: date, store,
-      out_start: o.out_start, out_end: o.out_end || null
-    };
-    if (o.id) await api('PATCH', `outings?id=eq.${o.id}`, ob);
-    else await api('POST', 'outings', ob);
+  // 休憩・外出の保存（始まりの時刻が空の行は保存しない）
+  for (const kind of ['breaks', 'outings']) {
+    const k = ADMIN_KINDS[kind];
+    for (const r of adminLists[kind]) {
+      if (!r.start) continue;
+      const rb = { staff_name: staffName, work_date: date, store };
+      rb[k.startKey] = r.start;
+      rb[k.endKey] = r.end || null;
+      if (r.id) await api('PATCH', `${k.table}?id=eq.${r.id}`, rb);
+      else await api('POST', k.table, rb);
+    }
   }
 
   showToast('記録を修正しました');
@@ -868,11 +899,12 @@ async function saveAdminEntry() {
 
 async function deleteAdminEntry() {
   if (!adminEntryId) return;
-  if (!confirm('この日の記録（外出記録も含む）を削除しますか？元に戻せません。')) return;
-  const staffName = document.getElementById('admin-staff').value;
+  if (!confirm('この日の記録（休憩・外出の記録も含む）を削除しますか？元に戻せません。')) return;
+  const name = encodeURIComponent(document.getElementById('admin-staff').value);
   const date = document.getElementById('admin-date').value;
   await api('DELETE', `time_entries?id=eq.${adminEntryId}`);
-  await api('DELETE', `outings?staff_name=eq.${encodeURIComponent(staffName)}&work_date=eq.${date}`);
+  await api('DELETE', `breaks?staff_name=eq.${name}&work_date=eq.${date}`);
+  await api('DELETE', `outings?staff_name=eq.${name}&work_date=eq.${date}`);
   showToast('記録を削除しました');
   adminEntryId = null;
   loadAdminEntry();
@@ -1252,7 +1284,34 @@ async function reviewLeaveRequest(id, status) {
   loadLeaveReview();
 }
 
+// 休憩の「今何分？」「今日の合計」を表示
+function renderBreakSummary() {
+  const el = document.getElementById('break-summary');
+  if (!el) return;
+  if (!currentStaff || !todayBreaks.length) { el.style.display = 'none'; return; }
+  const open = findOpenBreak(todayBreaks);
+  const doneCount = todayBreaks.filter(b => b.break_end).length;
+  const doneMin = breakMinutes(todayBreaks);
+  let html = '';
+  if (open) {
+    const d = new Date();
+    const nowMin = d.getHours() * 60 + d.getMinutes();
+    const elapsed = Math.max(0, nowMin - timeToMinutes(open.break_start));
+    html += `☕ ${open.break_start.slice(0,5)}から休憩中　<span class="big">${elapsed}分</span> 経過<br>`;
+  } else {
+    const last = [...todayBreaks].reverse().find(b => b.break_end);
+    if (last) {
+      const lastMin = timeToMinutes(last.break_end) - timeToMinutes(last.break_start);
+      html += `☕ さっきの休憩　<span class="big">${lastMin}分</span>（${last.break_start.slice(0,5)}〜${last.break_end.slice(0,5)}）<br>`;
+    }
+  }
+  if (doneCount) html += `今日の休憩：${doneCount}回・合計${doneMin}分`;
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
 function renderStatus() {
+  renderBreakSummary();
   const badge = document.getElementById('status-badge');
   const openOut = findOpenOuting(todayOutings);
   if (!todayEntry || !todayEntry.clock_in) {
@@ -1264,7 +1323,7 @@ function renderStatus() {
   } else if (openOut) {
     badge.textContent = '🚶 外出中';
     badge.className = 'status-badge status-out';
-  } else if (todayEntry.break_start && !todayEntry.break_end) {
+  } else if (findOpenBreak(todayBreaks)) {
     badge.textContent = '☕ 休憩中';
     badge.className = 'status-badge status-break';
   } else {
@@ -1285,7 +1344,7 @@ function renderClockButtons() {
   } else if (openOut) {
     wrap.innerHTML = `<button class="big-btn btn-out" onclick="doOutEnd()">🔙 外出から戻る</button>
       <div class="hint" style="text-align:center;">退勤する前に「外出から戻る」を押してください</div>`;
-  } else if (todayEntry.break_start && !todayEntry.break_end) {
+  } else if (findOpenBreak(todayBreaks)) {
     wrap.innerHTML = `<button class="big-btn btn-break" onclick="doBreakEnd()">☕ 休憩から戻る</button>`;
   } else {
     wrap.innerHTML = `
@@ -1297,16 +1356,17 @@ function renderClockButtons() {
 
 function renderTodayLog() {
   const list = document.getElementById('today-log-list');
-  if (!todayEntry && !todayOutings.length) { list.innerHTML = '<div class="empty">まだ記録がありません</div>'; return; }
+  if (!todayEntry && !todayOutings.length && !todayBreaks.length) { list.innerHTML = '<div class="empty">まだ記録がありません</div>'; return; }
   const rows = []; // [ラベル, 表示時刻, 並べ替え用の分]
   const e = todayEntry || {};
   if (e.clock_in) rows.push(['🟢 出勤', e.clock_in.slice(0,5), timeToMinutes(e.clock_in)]);
-  if (e.break_start) rows.push(['☕ 休憩開始', e.break_start.slice(0,5), timeToMinutes(e.break_start)]);
-  if (e.break_end) {
-    const bs = timeToMinutes(e.break_start), be = timeToMinutes(e.break_end);
-    const breakMin = bs !== null && be !== null ? be - bs : null;
-    rows.push(['☕ 休憩終了', e.break_end.slice(0,5) + (breakMin !== null ? `（${breakMin}分）` : ''), be]);
-  }
+  todayBreaks.forEach(b => {
+    rows.push(['☕ 休憩開始', b.break_start.slice(0,5), timeToMinutes(b.break_start)]);
+    if (b.break_end) {
+      const min = timeToMinutes(b.break_end) - timeToMinutes(b.break_start);
+      rows.push(['☕ 休憩終了', `${b.break_end.slice(0,5)}（${min}分）`, timeToMinutes(b.break_end)]);
+    }
+  });
   todayOutings.forEach(o => {
     rows.push(['🚶 外出', o.out_start.slice(0,5), timeToMinutes(o.out_start)]);
     if (o.out_end) {
@@ -1351,17 +1411,25 @@ async function doClockIn() {
   updateVerifyButtons();
 }
 async function doBreakStart() {
+  if (!todayEntry) return;
+  if (findOpenBreak(todayBreaks)) { showToast('すでに休憩中です', true); return; }
   const t = nowTimeStr();
-  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { break_start: t });
+  const res = await api('POST', 'breaks', {
+    staff_name: currentStaff.name, store: currentStore, work_date: todayStr(), break_start: t
+  });
+  if (!res.ok) { showToast('休憩を記録できませんでした', true); return; }
   sendToSheet('休憩開始', t);
   showToast('休憩開始を記録しました');
   await loadTodayEntry();
 }
 async function doBreakEnd() {
+  const b = findOpenBreak(todayBreaks);
+  if (!b) return;
   const t = nowTimeStr();
-  await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { break_end: t });
+  await api('PATCH', `breaks?id=eq.${b.id}`, { break_end: t });
   sendToSheet('休憩終了', t);
-  showToast('休憩終了を記録しました');
+  const min = Math.max(0, timeToMinutes(t) - timeToMinutes(b.break_start));
+  showToast(`休憩終了！今回の休憩は${min}分でした`);
   await loadTodayEntry();
 }
 async function doOutStart() {
@@ -1388,6 +1456,7 @@ async function doOutEnd() {
 }
 async function doClockOut() {
   if (findOpenOuting(todayOutings)) { showToast('先に「外出から戻る」を押してください', true); return; }
+  if (findOpenBreak(todayBreaks)) { showToast('先に「休憩から戻る」を押してください', true); return; }
   const t = nowTimeStr();
   await api('PATCH', `time_entries?id=eq.${todayEntry.id}`, { clock_out: t });
   sendToSheet('退勤', t);
@@ -1402,13 +1471,12 @@ function timeToMinutes(t) {
   const [h,m] = t.split(':').map(Number);
   return h*60+m;
 }
-// 実働時間 = 退勤 − 出勤 − 休憩（外出中は仕事中なので勤務時間に含める）
-function calcWorkMinutes(e) {
+// 実働時間 = 退勤 − 出勤 − 休憩の合計（何回でも）。外出中は仕事中なので勤務時間に含める
+function calcWorkMinutes(e, breaks) {
   const inM = timeToMinutes(e.clock_in), outM = timeToMinutes(e.clock_out);
   if (inM === null || outM === null) return 0;
   let total = outM - inM;
-  const bs = timeToMinutes(e.break_start), be = timeToMinutes(e.break_end);
-  if (bs !== null && be !== null) total -= (be - bs);
+  total -= breakMinutes(breaks);
   return Math.max(0, total);
 }
 function minutesToHM(min) {
@@ -1428,16 +1496,18 @@ async function loadSummary() {
   const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
   const name = encodeURIComponent(staffName);
   const range = `work_date=gte.${month}-01&work_date=lte.${month}-${pad(lastDay)}`;
-  const [resRaw, outsRaw] = await Promise.all([
+  const [resRaw, brksRaw, outsRaw] = await Promise.all([
     api('GET', `time_entries?staff_name=eq.${name}&${range}&order=work_date.desc`),
+    api('GET', `breaks?staff_name=eq.${name}&${range}&order=break_start.asc`),
     api('GET', `outings?staff_name=eq.${name}&${range}&order=out_start.asc`)
   ]);
   const res = asList(resRaw);
-  const outByDate = {};
+  const brkByDate = {}, outByDate = {};
+  asList(brksRaw).forEach(b => { (brkByDate[b.work_date] = brkByDate[b.work_date] || []).push(b); });
   asList(outsRaw).forEach(o => { (outByDate[o.work_date] = outByDate[o.work_date] || []).push(o); });
 
   let totalMin = 0;
-  res.forEach(e => totalMin += calcWorkMinutes(e));
+  res.forEach(e => totalMin += calcWorkMinutes(e, brkByDate[e.work_date]));
   document.getElementById('sum-label').textContent = `${y}年${parseInt(m)}月 ${staffName} 合計勤務時間`;
   document.getElementById('sum-total').textContent = minutesToHM(totalMin);
 
@@ -1452,7 +1522,9 @@ async function loadSummary() {
     const dateLabel = `${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
     const outs = outByDate[e.work_date] || [];
     const extras = [];
-    if (e.break_start && e.break_end) extras.push(`休憩${timeToMinutes(e.break_end)-timeToMinutes(e.break_start)}分`);
+    const brks = brkByDate[e.work_date] || [];
+    const brkMin = breakMinutes(brks);
+    if (brkMin) extras.push(`休憩${brks.filter(b => b.break_end).length}回・${brkMin}分`);
     const outMin = outingMinutes(outs);
     if (outMin) extras.push(`外出${outs.length}回・${outMin}分`);
     const timesLabel = e.clock_in && e.clock_out
@@ -1460,7 +1532,7 @@ async function loadSummary() {
       : '記録不足';
     return `<div class="day-row">
       <div><div class="day-date">${dateLabel}</div><div class="day-times">${timesLabel}</div></div>
-      <div class="day-hours">${minutesToHHMM(calcWorkMinutes(e))}</div>
+      <div class="day-hours">${minutesToHHMM(calcWorkMinutes(e, brks))}</div>
     </div>`;
   }).join('');
 }
