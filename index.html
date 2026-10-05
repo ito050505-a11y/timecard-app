@@ -292,20 +292,20 @@
   <!-- 有給申請タブ -->
   <div id="main-leave" class="content" style="padding:0;">
     <div style="background:linear-gradient(135deg,#7fd8d0,#3fb8b3);border-radius:16px;padding:20px;color:#fff;margin-bottom:14px;text-align:center;">
-      <div style="font-size:12px;opacity:0.85;margin-bottom:4px;">残り有給日数</div>
+      <div style="font-size:12px;opacity:0.85;margin-bottom:4px;">残りの有給（全部あわせて）</div>
       <div style="font-size:32px;font-weight:800;" id="leave-balance-days">-</div>
       <div style="font-size:11px;margin-top:6px;opacity:0.85;" id="leave-balance-sub"></div>
     </div>
 
     <div style="background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:20px;box-shadow:0 1px 6px rgba(0,0,0,0.05);">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:12px;font-weight:700;color:#555;">⏱ 時間単位 使用状況</div>
+        <div style="font-size:12px;font-weight:700;color:#555;">⏱ 時間単位で使った分</div>
         <div style="font-size:13px;font-weight:800;color:#0f766e;" id="leave-hourly-num">- / 40 時間</div>
       </div>
       <div style="background:#eee;border-radius:20px;height:8px;overflow:hidden;">
         <div id="leave-hourly-bar" style="background:linear-gradient(90deg,#7fd8d0,#3fb8b3);height:100%;border-radius:20px;width:0%;"></div>
       </div>
-      <div style="font-size:11px;color:#b0b0b0;margin-top:6px;">年5日分（40時間）まで時間単位で取得できます</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:8px;line-height:1.6;" id="leave-hourly-note">時間単位で取れるのは、上の残りのうち年5日分（40時間）までです</div>
     </div>
 
     <div style="background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 6px rgba(0,0,0,0.05);margin-bottom:20px;">
@@ -472,7 +472,19 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbxh63i_pNpIr5v1dG4bnCUe
 
 let STAFF = [];
 const LEAVE_TYPES = ['全休', '半休', '時間'];
-const HOURLY_LEAVE_LIMIT = 40; // 年5日分（8時間×5日）まで時間単位OK
+const LEAVE_HOURS_PER_DAY = 8;  // 有給1日分＝8時間（所定労働時間）
+const HOURLY_LEAVE_LIMIT = 40;  // 年5日分（8時間×5日）まで時間単位OK
+
+// 有給の日数（小数）を「○日と○時間」で表示
+function formatLeave(daysFloat) {
+  const totalH = Math.max(0, Math.round((daysFloat || 0) * LEAVE_HOURS_PER_DAY * 10) / 10);
+  const d = Math.floor(totalH / LEAVE_HOURS_PER_DAY + 1e-9);
+  const h = Math.round((totalH - d * LEAVE_HOURS_PER_DAY) * 10) / 10;
+  if (!d && !h) return '0日';
+  if (!h) return `${d}日`;
+  if (!d) return `${h}時間`;
+  return `${d}日と${h}時間`;
+}
 
 const STORES = {
   '燈乃工房':  { lat: 34.8680933, lng: 136.5803907, qrToken: 'AKARINOKOBO-HONTEN' },
@@ -1001,11 +1013,14 @@ async function loadLeaveTab() {
   const bal = balRes[0] || { granted_days: 0, used_days: 0, hourly_used_this_year: 0 };
   currentLeaveBalance = bal;
   const remaining = (bal.granted_days || 0) - (bal.used_days || 0);
-  document.getElementById('leave-balance-days').textContent = remaining.toFixed(1) + ' 日';
-  document.getElementById('leave-balance-sub').textContent = `付与：${bal.granted_days || 0}日／使用済：${(bal.used_days || 0).toFixed(1)}日`;
+  document.getElementById('leave-balance-days').textContent = formatLeave(remaining);
+  document.getElementById('leave-balance-sub').textContent = `付与 ${bal.granted_days || 0}日 ／ 使った分 ${formatLeave(bal.used_days || 0)}（1日＝${LEAVE_HOURS_PER_DAY}時間）`;
   const hourlyUsed = bal.hourly_used_this_year || 0;
   document.getElementById('leave-hourly-num').textContent = `${hourlyUsed} / ${HOURLY_LEAVE_LIMIT} 時間`;
   document.getElementById('leave-hourly-bar').style.width = Math.min(100, hourlyUsed / HOURLY_LEAVE_LIMIT * 100) + '%';
+  const hourlyLeft = Math.max(0, Math.min(HOURLY_LEAVE_LIMIT - hourlyUsed, Math.floor(remaining * LEAVE_HOURS_PER_DAY)));
+  document.getElementById('leave-hourly-note').innerHTML =
+    `※これは<b>別枠ではありません</b>。時間単位で使った分も、上の「残りの有給」から引かれます（${LEAVE_HOURS_PER_DAY}時間＝1日分）。<br>時間単位で取れるのは、残りのうち年5日分（${HOURLY_LEAVE_LIMIT}時間）まで。あと <b>${hourlyLeft}時間</b> 取れます。`;
 
   const reqRes = await api('GET', `leave_requests?staff=eq.${encodeURIComponent(currentStaff.name)}&order=requested_at.desc`);
   renderLeaveHistory(reqRes || []);
@@ -1049,7 +1064,7 @@ async function submitLeaveRequest() {
     }
     body.hours = hours;
     body.start_time = startTime;
-    body.days_count = hours / 8;
+    body.days_count = hours / LEAVE_HOURS_PER_DAY;
     body.end_date = startDate;
   } else if (leaveType === '半休') {
     body.days_count = 0.5;
@@ -1060,6 +1075,13 @@ async function submitLeaveRequest() {
     if (days < 1) { showToast('終了日は開始日以降にしてね', true); return; }
     body.days_count = days;
     body.end_date = endDate;
+  }
+
+  const bal = currentLeaveBalance || {};
+  const remainingNow = (bal.granted_days || 0) - (bal.used_days || 0);
+  if (body.days_count > remainingNow + 1e-9) {
+    showToast(`残りの有給（${formatLeave(remainingNow)}）が足りません`, true);
+    return;
   }
 
   await api('POST', 'leave_requests', body);
@@ -1112,10 +1134,12 @@ async function cancelApprovedLeave(id) {
   const bal = balRes[0];
   if (bal) {
     const patch = { updated_at: new Date().toISOString() };
+    const daysBack = req.leave_type === '時間'
+      ? Number(req.hours || 0) / LEAVE_HOURS_PER_DAY
+      : Number(req.days_count || 0);
+    patch.used_days = Math.max(0, (bal.used_days || 0) - daysBack);
     if (req.leave_type === '時間') {
       patch.hourly_used_this_year = Math.max(0, (bal.hourly_used_this_year || 0) - Number(req.hours || 0));
-    } else {
-      patch.used_days = Math.max(0, (bal.used_days || 0) - Number(req.days_count || 0));
     }
     await api('PATCH', `leave_balances?staff=eq.${encodeURIComponent(req.staff)}`, patch);
   }
@@ -1311,12 +1335,12 @@ function renderLeaveBalances(list) {
       </div>
       <div style="display:flex;gap:8px;">
         <div style="flex:1;background:#fafafa;border-radius:10px;padding:8px;text-align:center;">
-          <div style="font-size:15px;font-weight:800;color:#0f766e;">${remaining.toFixed(1)}日</div>
-          <div style="font-size:10px;color:#999;margin-top:2px;">残り／付与${b.granted_days||0}日</div>
+          <div style="font-size:15px;font-weight:800;color:#0f766e;">${formatLeave(remaining)}</div>
+          <div style="font-size:10px;color:#999;margin-top:2px;">残り（付与${b.granted_days||0}日）</div>
         </div>
         <div style="flex:1;background:#fafafa;border-radius:10px;padding:8px;text-align:center;">
           <div style="font-size:15px;font-weight:800;color:#0f766e;">${b.hourly_used_this_year||0}h</div>
-          <div style="font-size:10px;color:#999;margin-top:2px;">時間単位使用／${HOURLY_LEAVE_LIMIT}h</div>
+          <div style="font-size:10px;color:#999;margin-top:2px;">うち時間単位で使用／上限${HOURLY_LEAVE_LIMIT}h</div>
         </div>
       </div>
     </div>`;
@@ -1347,10 +1371,12 @@ async function reviewLeaveRequest(id, status) {
     const bal = balRes[0];
     if (bal) {
       const patch = { updated_at: new Date().toISOString() };
+      const daysUsed = req.leave_type === '時間'
+        ? Number(req.hours || 0) / LEAVE_HOURS_PER_DAY
+        : Number(req.days_count || 0);
+      patch.used_days = (bal.used_days || 0) + daysUsed;   // 時間単位も残り日数から引く
       if (req.leave_type === '時間') {
         patch.hourly_used_this_year = (bal.hourly_used_this_year || 0) + Number(req.hours || 0);
-      } else {
-        patch.used_days = (bal.used_days || 0) + Number(req.days_count || 0);
       }
       await api('PATCH', `leave_balances?staff=eq.${encodeURIComponent(req.staff)}`, patch);
     }
