@@ -22,7 +22,14 @@
   .form-card { background: #fff; border-radius: 16px; padding: 24px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
   .form-group { margin-bottom: 16px; }
   .form-label { font-size: 12px; color: #6b7280; margin-bottom: 6px; font-weight: 600; }
-  .form-input { width: 100%; padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 15px; font-family: inherit; }
+  .form-input { width: 100%; max-width: 100%; min-width: 0; padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 15px; font-family: inherit; background: #fff; color: #222; }
+  /* iPhoneで日付・時刻の枠がはみ出さないように */
+  input[type="date"].form-input, input[type="time"].form-input, input[type="month"].form-input {
+    -webkit-appearance: none; appearance: none; display: block; min-height: 46px; text-align: left;
+  }
+  input[type="date"].form-input::-webkit-date-and-time-value,
+  input[type="time"].form-input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+  .filter-row input, .filter-row select { min-width: 0; -webkit-appearance: none; appearance: none; color: #222; }
   .btn-save { width: 100%; padding: 15px; border-radius: 12px; border: none; background: linear-gradient(135deg, #7fd8d0, #3fb8b3); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; margin-top: 6px; }
   .login-error { color: #ef4444; font-size: 13px; text-align: center; margin-top: 10px; display: none; }
 
@@ -305,7 +312,7 @@
       <div style="background:#eee;border-radius:20px;height:8px;overflow:hidden;">
         <div id="leave-hourly-bar" style="background:linear-gradient(90deg,#7fd8d0,#3fb8b3);height:100%;border-radius:20px;width:0%;"></div>
       </div>
-      <div style="font-size:11px;color:#6b7280;margin-top:8px;line-height:1.6;" id="leave-hourly-note">時間単位で取れるのは、上の残りのうち年5日分（40時間）までです</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:8px;line-height:1.6;" id="leave-hourly-note"></div>
     </div>
 
     <div style="background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 6px rgba(0,0,0,0.05);margin-bottom:20px;">
@@ -1019,8 +1026,7 @@ async function loadLeaveTab() {
   document.getElementById('leave-hourly-num').textContent = `${hourlyUsed} / ${HOURLY_LEAVE_LIMIT} 時間`;
   document.getElementById('leave-hourly-bar').style.width = Math.min(100, hourlyUsed / HOURLY_LEAVE_LIMIT * 100) + '%';
   const hourlyLeft = Math.max(0, Math.min(HOURLY_LEAVE_LIMIT - hourlyUsed, Math.floor(remaining * LEAVE_HOURS_PER_DAY)));
-  document.getElementById('leave-hourly-note').innerHTML =
-    `※これは<b>別枠ではありません</b>。時間単位で使った分も、上の「残りの有給」から引かれます（${LEAVE_HOURS_PER_DAY}時間＝1日分）。<br>時間単位で取れるのは、残りのうち年5日分（${HOURLY_LEAVE_LIMIT}時間）まで。あと <b>${hourlyLeft}時間</b> 取れます。`;
+  document.getElementById('leave-hourly-note').innerHTML = `時間単位は、あと <b>${hourlyLeft}時間</b> 取れます`;
 
   const reqRes = await api('GET', `leave_requests?staff=eq.${encodeURIComponent(currentStaff.name)}&order=requested_at.desc`);
   renderLeaveHistory(reqRes || []);
